@@ -498,7 +498,7 @@
 
     <p class="panel preview-note">
       چکر بررسی می‌کند همه افراد فایل ورودی وارد برنامه شده‌اند و نام، تاریخ تولد، کد ملی و تلفن‌شان دقیقاً مثل فایل ورودی است.
-      خروجی Word فقط شامل عنوان بخش و برای هر نفر: نام، تاریخ تولد، کد ملی و تلفن است.
+      خروجی Word برای هر دسته یک تیتر دارد و افراد همان دسته داخل جدول با ستون‌های نام، تاریخ تولد، کد ملی و تلفن قرار می‌گیرند.
     </p>
   </div>
 
@@ -1008,8 +1008,11 @@
       for (const section of state.sections) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
-        const lines = members.flatMap((p, i) => personExportLines(p, i));
-        blocks.push(`${section.title}\n${lines.join("\n")}`);
+        const header = "ردیف\tنام و نام خانوادگی\tتاریخ تولد\tکد ملی\tتلفن";
+        const rows = members.map((p, i) =>
+          [i + 1, p.name, p.birthDate || "—", p.nationalId || "—", p.phone || "—"].join("\t")
+        );
+        blocks.push(`${section.title}\n${header}\n${rows.join("\n")}`);
       }
       return blocks.join("\n\n");
     }
@@ -1024,7 +1027,7 @@
         </w:rPr>`;
     }
 
-    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120 } = {}) {
+    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120, spaceBefore = 0 } = {}) {
       const rPr = wordRunProps({ bold, size });
       const lines = String(text).split(/\n/);
       const runs = lines.map((line, index) => {
@@ -1040,12 +1043,98 @@
       return `
         <w:p>
           <w:pPr>
-            <w:spacing w:after="${spaceAfter}"/>
+            <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
             <w:bidi w:val="1"/>
           </w:pPr>
           ${runs}
         </w:p>`;
+    }
+
+    function wordCellParagraph(text, { bold = false, size = 18, align = "center", header = false } = {}) {
+      const rPr = wordRunProps({ bold: bold || header, size });
+      const safe = xmlEscape(text || "—");
+      return `
+        <w:p>
+          <w:pPr>
+            <w:spacing w:before="40" w:after="40"/>
+            <w:jc w:val="${align}"/>
+            <w:bidi w:val="1"/>
+          </w:pPr>
+          <w:r>
+            ${rPr}
+            <w:t xml:space="preserve">${safe}</w:t>
+          </w:r>
+        </w:p>`;
+    }
+
+    function wordTableCell(text, { width, bold = false, header = false, align = "center" } = {}) {
+      const fill = header
+        ? `<w:shd w:val="clear" w:color="auto" w:fill="E8F2ED"/>`
+        : "";
+      return `
+        <w:tc>
+          <w:tcPr>
+            <w:tcW w:w="${width}" w:type="dxa"/>
+            ${fill}
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          ${wordCellParagraph(text, { bold, header, align: header ? "center" : align })}
+        </w:tc>`;
+    }
+
+    function wordPeopleTable(members) {
+      // With bidiVisual, first cell is rightmost: ردیف | نام | تاریخ تولد | کد ملی | تلفن
+      const widths = [900, 3200, 1800, 2000, 2000];
+      const headers = ["ردیف", "نام و نام خانوادگی", "تاریخ تولد", "کد ملی", "تلفن"];
+      const headerRow = `
+        <w:tr>
+          ${headers.map((title, i) => wordTableCell(title, { width: widths[i], header: true, bold: true })).join("")}
+        </w:tr>`;
+
+      const bodyRows = members.map((person, index) => {
+        const values = [
+          String(index + 1),
+          person.name || "—",
+          person.birthDate || "—",
+          person.nationalId || "—",
+          person.phone || "—",
+        ];
+        const aligns = ["center", "right", "center", "center", "center"];
+        return `
+          <w:tr>
+            ${values.map((value, i) => wordTableCell(value, {
+              width: widths[i],
+              bold: i === 1,
+              align: aligns[i],
+            })).join("")}
+          </w:tr>`;
+      }).join("");
+
+      return `
+        <w:tbl>
+          <w:tblPr>
+            <w:tblStyle w:val="TableGrid"/>
+            <w:tblW w:w="${widths.reduce((a, b) => a + b, 0)}" w:type="dxa"/>
+            <w:jc w:val="center"/>
+            <w:bidiVisual w:val="1"/>
+            <w:tblBorders>
+              <w:top w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
+              <w:left w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
+              <w:bottom w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
+              <w:right w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
+              <w:insideH w:val="single" w:sz="6" w:space="0" w:color="B7C9BF"/>
+              <w:insideV w:val="single" w:sz="6" w:space="0" w:color="B7C9BF"/>
+            </w:tblBorders>
+            <w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
+          </w:tblPr>
+          <w:tblGrid>
+            ${widths.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}
+          </w:tblGrid>
+          ${headerRow}
+          ${bodyRows}
+        </w:tbl>
+        ${wordParagraph("", { spaceAfter: 200 })}`;
     }
 
     function runCompletenessCheck({ exportedIds = null, liveRecords = null, source = "manual" } = {}) {
@@ -1230,19 +1319,27 @@
     async function exportWord() {
       const bodyParts = [];
       const exported = [];
-      bodyParts.push(wordParagraph("لیست تفکیک‌شده مهمانان", { bold: true, size: 32, spaceAfter: 240 }));
+      bodyParts.push(wordParagraph("لیست تفکیک‌شده مهمانان", {
+        bold: true,
+        size: 32,
+        align: "center",
+        spaceAfter: 280,
+      }));
 
       for (const section of state.sections) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
-        bodyParts.push(wordParagraph(section.title, { bold: true, size: 26, spaceAfter: 160 }));
-        members.forEach((person, index) => {
-          exported.push(person);
-          bodyParts.push(wordParagraph(`${index + 1}. ${person.name}`, { bold: true, size: 22, spaceAfter: 40 }));
-          bodyParts.push(wordParagraph(`تاریخ تولد: ${person.birthDate || "—"}`, { size: 20, spaceAfter: 20 }));
-          bodyParts.push(wordParagraph(`کد ملی: ${person.nationalId || "—"}`, { size: 20, spaceAfter: 20 }));
-          bodyParts.push(wordParagraph(`تلفن: ${person.phone || "—"}`, { size: 20, spaceAfter: 140 }));
-        });
+
+        bodyParts.push(wordParagraph(section.title, {
+          bold: true,
+          size: 26,
+          align: "right",
+          spaceBefore: 160,
+          spaceAfter: 120,
+        }));
+
+        members.forEach((person) => exported.push(person));
+        bodyParts.push(wordPeopleTable(members));
       }
 
       if (!exported.length) {
@@ -1258,7 +1355,7 @@
     ${bodyParts.join("\n")}
     <w:sectPr>
       <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>
+      <w:pgMar w:top="1008" w:right="1008" w:bottom="1008" w:left="1008"/>
       <w:bidi/>
     </w:sectPr>
   </w:body>
@@ -1304,7 +1401,7 @@
       render();
 
       if (check.ok) {
-        toast("خروجی Word آماده شد — صحت ورود تأیید شد");
+        toast("خروجی Word جدولی آماده شد — صحت ورود تأیید شد");
       } else {
         const missed = check.missingFromProgram.length + check.alteredInProgram.length + check.missingFromExport.length;
         toast(`خروجی گرفته شد — چکر ${missed} مورد مشکوک پیدا کرد`);
