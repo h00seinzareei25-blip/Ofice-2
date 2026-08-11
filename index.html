@@ -441,6 +441,24 @@
       padding: 0.35rem 0.45rem;
     }
 
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .edit-grid {
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    .edit-grid label {
+      display: grid;
+      gap: 0.2rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
     .preview-note {
       margin-top: 1rem;
       padding: 0.9rem 1rem;
@@ -586,7 +604,7 @@
 
     <p class="panel preview-note">
       چکر بررسی می‌کند همه افراد فایل ورودی وارد برنامه شده‌اند و نام، تاریخ تولد، کد ملی و تلفن‌شان دقیقاً مثل فایل ورودی است.
-      خروجی Word برای هر دسته یک تیتر دارد و افراد همان دسته داخل جدول با ستون‌های نام، تاریخ تولد، کد ملی و تلفن قرار می‌گیرند.
+      خروجی Word برای هر دسته یک تیتر و جدول دارد. هر نفر می‌تواند هم‌زمان در چند بخش باشد؛ از داخل لیست بخش می‌توانید ویرایش، حذف، جابه‌جایی یا افزودن به بخش دیگر را انجام دهید.
     </p>
   </div>
 
@@ -610,7 +628,7 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    const APP_VERSION = 2;
+    const APP_VERSION = 3;
 
     const state = {
       people: [],
@@ -799,7 +817,7 @@
         nationalId,
         phone,
         sourceFile,
-        sectionId: UNASSIGNED,
+        sectionIds: [],
         registeredAt: null,
         assignedAt: null,
       };
@@ -854,11 +872,23 @@
     }
 
     function peopleInSection(sectionId) {
-      return state.people.filter((p) => p.sectionId === sectionId);
+      return state.people.filter((p) => getSectionIds(p).includes(sectionId));
     }
 
     function assignedPeople() {
-      return state.people.filter((p) => p.sectionId);
+      return state.people.filter((p) => getSectionIds(p).length > 0);
+    }
+
+    function getSectionIds(person) {
+      if (Array.isArray(person.sectionIds)) return person.sectionIds.filter(Boolean);
+      if (person.sectionId) return [person.sectionId];
+      return [];
+    }
+
+    function normalizePersonSections(person) {
+      person.sectionIds = getSectionIds(person);
+      delete person.sectionId;
+      return person;
     }
 
     function uniqueRoles() {
@@ -902,15 +932,40 @@
     }
 
     function assignPerson(person, sectionId) {
-      const next = sectionId || UNASSIGNED;
-      const prev = person.sectionId || UNASSIGNED;
-      person.sectionId = next;
-      if (next && next !== prev) {
-        person.assignedAt = nowIso();
-      }
-      if (!next) {
+      normalizePersonSections(person);
+      if (!sectionId) {
+        person.sectionIds = [];
         person.assignedAt = null;
+        return;
       }
+      const already = person.sectionIds.includes(sectionId);
+      person.sectionIds = [sectionId];
+      if (!already) person.assignedAt = nowIso();
+    }
+
+    function addPersonToSection(person, sectionId) {
+      if (!sectionId) return false;
+      normalizePersonSections(person);
+      if (person.sectionIds.includes(sectionId)) return false;
+      person.sectionIds.push(sectionId);
+      person.assignedAt = nowIso();
+      return true;
+    }
+
+    function removePersonFromSection(person, sectionId) {
+      normalizePersonSections(person);
+      person.sectionIds = person.sectionIds.filter((id) => id !== sectionId);
+      if (!person.sectionIds.length) person.assignedAt = null;
+    }
+
+    function deletePerson(personId) {
+      state.people = state.people.filter((p) => p.id !== personId);
+    }
+
+    function sectionTitlesForPerson(person) {
+      return getSectionIds(person)
+        .map((id) => state.sections.find((s) => s.id === id)?.title)
+        .filter(Boolean);
     }
 
     function buildBackupPayload() {
@@ -962,12 +1017,18 @@
       if (!payload || !Array.isArray(payload.people) || !Array.isArray(payload.sections)) {
         throw new Error("ساختار بک‌آپ نامعتبر است");
       }
-      state.people = payload.people.map((p) => ({
-        ...p,
-        sectionId: p.sectionId || UNASSIGNED,
-        registeredAt: p.registeredAt || payload.savedAt || null,
-        assignedAt: p.assignedAt || (p.sectionId ? payload.savedAt || null : null),
-      }));
+      state.people = payload.people.map((p) => {
+        const person = {
+          ...p,
+          registeredAt: p.registeredAt || payload.savedAt || null,
+          assignedAt: p.assignedAt || null,
+        };
+        normalizePersonSections(person);
+        if (!person.assignedAt && person.sectionIds.length) {
+          person.assignedAt = payload.savedAt || null;
+        }
+        return person;
+      });
       state.sections = payload.sections;
       state.batches = (Array.isArray(payload.batches) ? payload.batches : []).map((batch) => {
         if (Array.isArray(batch.records) && batch.records.length) return batch;
@@ -1050,7 +1111,7 @@
 
     function renderPeople() {
       const unassigned = state.people
-        .filter((p) => !p.sectionId)
+        .filter((p) => getSectionIds(p).length === 0)
         .sort((a, b) => Number(a.row) - Number(b.row));
 
       if (!state.people.length) {
@@ -1079,7 +1140,7 @@
           </div>
           <div class="assign-row">
             <select class="assign-select" data-id="${escapeHtml(person.id)}" aria-label="انتخاب بخش برای ${escapeHtml(person.name)}">
-              ${sectionOptions(person.sectionId)}
+              ${sectionOptions("", { emptyLabel: "— انتخاب بخش —" })}
             </select>
             <button type="button" class="ghost small match-role" data-id="${escapeHtml(person.id)}" ${state.sections.length ? "" : "disabled"}>بر اساس سمت</button>
           </div>
@@ -1113,7 +1174,7 @@
       }).join("");
     }
 
-    function sectionMembersHtml(members) {
+    function sectionMembersHtml(members, currentSectionId) {
       if (!members.length) {
         return `<div class="empty">کسی در این بخش نیست.</div>`;
       }
@@ -1122,36 +1183,71 @@
           <thead>
             <tr>
               <th>ردیف</th>
-              <th>نام و نام خانوادگی</th>
+              <th>نام و مشخصات</th>
               <th>تاریخ و ساعت ثبت</th>
-              <th>تاریخ تولد</th>
-              <th>کد ملی</th>
-              <th>تلفن</th>
-              <th>تغییر بخش</th>
+              <th>بخش‌ها / عملیات</th>
             </tr>
           </thead>
           <tbody>
-            ${members.map((person, index) => `
-              <tr>
+            ${members.map((person, index) => {
+              const ids = getSectionIds(person);
+              const otherSections = state.sections.filter((s) => !ids.includes(s.id));
+              const addOptions = [
+                `<option value="">— افزودن به بخش دیگر —</option>`,
+                ...otherSections.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.title)}</option>`),
+              ].join("");
+              const moveOptions = sectionOptions("", {
+                emptyLabel: "— فقط خروج از این بخش —",
+              });
+              const titles = sectionTitlesForPerson(person);
+              return `
+              <tr data-person-id="${escapeHtml(person.id)}">
                 <td>${index + 1}</td>
                 <td>
-                  <div class="name">${escapeHtml(person.name)}</div>
-                  <div class="role" style="margin-top:0.2rem">${escapeHtml(person.role || "بدون سمت")}</div>
+                  <div class="view-mode">
+                    <div class="name">${escapeHtml(person.name)}</div>
+                    <div class="role" style="margin-top:0.2rem">${escapeHtml(person.role || "بدون سمت")}</div>
+                    <div class="chips" style="margin-top:0.35rem">
+                      <span class="chip">${escapeHtml(person.birthDate || "—")}</span>
+                      <span class="chip">${escapeHtml(person.nationalId || "—")}</span>
+                      <span class="chip">${escapeHtml(person.phone || "—")}</span>
+                    </div>
+                    ${titles.length > 1 ? `<div class="meta" style="margin-top:0.35rem;white-space:normal">بخش‌ها: ${escapeHtml(titles.join("، "))}</div>` : ""}
+                  </div>
+                  <div class="edit-mode" hidden>
+                    <div class="edit-grid">
+                      <label>نام<input type="text" class="edit-name" value="${escapeHtml(person.name)}" /></label>
+                      <label>سمت<input type="text" class="edit-role" value="${escapeHtml(person.role || "")}" /></label>
+                      <label>تاریخ تولد<input type="text" class="edit-birth" value="${escapeHtml(person.birthDate || "")}" /></label>
+                      <label>کد ملی<input type="text" class="edit-national" value="${escapeHtml(person.nationalId || "")}" /></label>
+                      <label>تلفن<input type="text" class="edit-phone" value="${escapeHtml(person.phone || "")}" /></label>
+                    </div>
+                    <div class="row-actions" style="margin-top:0.45rem">
+                      <button type="button" class="small save-person" data-id="${escapeHtml(person.id)}">ذخیره</button>
+                      <button type="button" class="ghost small cancel-edit" data-id="${escapeHtml(person.id)}">انصراف</button>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <div>${escapeHtml(formatDateTime(person.registeredAt))}</div>
                   <div class="meta" style="margin-top:0.2rem;white-space:normal">روز: ${escapeHtml(formatDateOnly(person.registeredAt))}</div>
                 </td>
-                <td>${escapeHtml(person.birthDate || "—")}</td>
-                <td>${escapeHtml(person.nationalId || "—")}</td>
-                <td>${escapeHtml(person.phone || "—")}</td>
                 <td>
-                  <select class="move-section-select" data-id="${escapeHtml(person.id)}" aria-label="تغییر بخش ${escapeHtml(person.name)}">
-                    ${sectionOptions(person.sectionId, { emptyLabel: "— بازگشت به لیست اصلی —" })}
+                  <div class="row-actions">
+                    <button type="button" class="ghost small edit-person" data-id="${escapeHtml(person.id)}">ویرایش</button>
+                    <button type="button" class="danger small delete-person" data-id="${escapeHtml(person.id)}">حذف</button>
+                  </div>
+                  <label class="meta" style="display:block;margin:0.45rem 0 0.2rem;white-space:normal">جابه‌جایی از این بخش</label>
+                  <select class="move-section-select" data-id="${escapeHtml(person.id)}" data-from-section="${escapeHtml(currentSectionId)}" aria-label="جابه‌جایی ${escapeHtml(person.name)}">
+                    ${moveOptions}
+                  </select>
+                  <label class="meta" style="display:block;margin:0.45rem 0 0.2rem;white-space:normal">افزودن به بخش دیگر</label>
+                  <select class="add-section-select" data-id="${escapeHtml(person.id)}" aria-label="افزودن ${escapeHtml(person.name)} به بخش دیگر" ${otherSections.length ? "" : "disabled"}>
+                    ${addOptions}
                   </select>
                 </td>
-              </tr>
-            `).join("")}
+              </tr>`;
+            }).join("")}
           </tbody>
         </table>
       `;
@@ -1163,11 +1259,12 @@
       const members = peopleInSection(section.id);
       if (!members.length) {
         if (!silent) toast("این بخش هنوز عضوی ندارد");
+        closeSectionModal();
         return;
       }
       activeSectionId = section.id;
       els.sectionModalTitle.textContent = `${section.title} (${members.length})`;
-      els.sectionModalBody.innerHTML = sectionMembersHtml(members);
+      els.sectionModalBody.innerHTML = sectionMembersHtml(members, section.id);
       els.sectionModal.hidden = false;
     }
 
@@ -1263,8 +1360,7 @@
       if (!role) return false;
       const section = findSectionByTitle(role);
       if (!section) return false;
-      assignPerson(person, section.id);
-      return true;
+      return addPersonToSection(person, section.id) || getSectionIds(person).includes(section.id);
     }
 
     function personExportLines(person, index) {
@@ -1460,7 +1556,9 @@
           missingFromExport.push({
             name: person.name,
             sourceFile: person.sourceFile || record.sourceFile,
-            reason: person.sectionId ? "در خروجی Word نبود" : "وارد برنامه شده ولی در بخشی برای خروجی قرار نگرفته",
+            reason: getSectionIds(person).length
+              ? "در خروجی Word نبود"
+              : "وارد برنامه شده ولی در بخشی برای خروجی قرار نگرفته",
           });
         }
       }
@@ -1852,7 +1950,7 @@
     els.autoAssignBtn.addEventListener("click", () => {
       let count = 0;
       for (const person of state.people) {
-        if (person.sectionId) continue;
+        if (getSectionIds(person).length) continue;
         if (assignByRole(person)) count += 1;
       }
       commit();
@@ -1964,7 +2062,7 @@
           return;
         }
         const section = addSection(role, { silent: true });
-        assignPerson(person, section.id);
+        addPersonToSection(person, section.id);
         toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
       } else {
         toast("در بخش مربوط به سمت قرار گرفت");
@@ -2000,9 +2098,7 @@
         e.stopPropagation();
         const sectionId = deleteBtn.dataset.sectionId;
         state.sections = state.sections.filter((s) => s.id !== sectionId);
-        state.people.forEach((p) => {
-          if (p.sectionId === sectionId) assignPerson(p, UNASSIGNED);
-        });
+        state.people.forEach((p) => removePersonFromSection(p, sectionId));
         if (activeSectionId === sectionId) closeSectionModal();
         commit();
         return;
@@ -2023,20 +2119,83 @@
       openSectionModal(openTarget.dataset.sectionId);
     });
 
+    els.sectionModalBody.addEventListener("click", (e) => {
+      const editBtn = e.target.closest(".edit-person");
+      if (editBtn) {
+        const row = editBtn.closest("tr");
+        if (!row) return;
+        row.querySelector(".view-mode").hidden = true;
+        row.querySelector(".edit-mode").hidden = false;
+        return;
+      }
+
+      const cancelBtn = e.target.closest(".cancel-edit");
+      if (cancelBtn) {
+        if (activeSectionId) openSectionModal(activeSectionId, { silent: true });
+        return;
+      }
+
+      const saveBtn = e.target.closest(".save-person");
+      if (saveBtn) {
+        const person = state.people.find((p) => p.id === saveBtn.dataset.id);
+        const row = saveBtn.closest("tr");
+        if (!person || !row) return;
+        const nextName = row.querySelector(".edit-name").value.trim();
+        if (!nextName) {
+          toast("نام نمی‌تواند خالی باشد");
+          return;
+        }
+        person.name = nextName;
+        person.role = row.querySelector(".edit-role").value.trim();
+        person.birthDate = row.querySelector(".edit-birth").value.trim();
+        person.nationalId = row.querySelector(".edit-national").value.trim();
+        person.phone = row.querySelector(".edit-phone").value.trim();
+        commit();
+        toast("مشخصات ویرایش شد");
+        return;
+      }
+
+      const deleteBtn = e.target.closest(".delete-person");
+      if (deleteBtn) {
+        const person = state.people.find((p) => p.id === deleteBtn.dataset.id);
+        if (!person) return;
+        if (!confirm(`«${person.name}» از کل برنامه حذف شود؟`)) return;
+        deletePerson(person.id);
+        commit();
+        toast("فرد حذف شد");
+      }
+    });
+
     els.sectionModalBody.addEventListener("change", (e) => {
-      const select = e.target.closest(".move-section-select");
-      if (!select) return;
-      const person = state.people.find((p) => p.id === select.dataset.id);
-      if (!person) return;
-      const nextSectionId = select.value || UNASSIGNED;
-      const previousSectionId = person.sectionId;
-      assignPerson(person, nextSectionId);
-      commit();
-      if (!nextSectionId) {
-        toast("به لیست اصلی برگشت");
-      } else if (nextSectionId !== previousSectionId) {
-        const section = state.sections.find((s) => s.id === nextSectionId);
-        toast(`به بخش «${section?.title || ""}» منتقل شد`);
+      const moveSelect = e.target.closest(".move-section-select");
+      if (moveSelect) {
+        const person = state.people.find((p) => p.id === moveSelect.dataset.id);
+        if (!person) return;
+        const fromSection = moveSelect.dataset.fromSection || activeSectionId;
+        const nextSectionId = moveSelect.value || UNASSIGNED;
+        removePersonFromSection(person, fromSection);
+        if (nextSectionId) addPersonToSection(person, nextSectionId);
+        commit();
+        if (!nextSectionId) toast("از این بخش خارج شد");
+        else {
+          const section = state.sections.find((s) => s.id === nextSectionId);
+          toast(`به بخش «${section?.title || ""}» جابه‌جا شد`);
+        }
+        return;
+      }
+
+      const addSelect = e.target.closest(".add-section-select");
+      if (addSelect) {
+        const person = state.people.find((p) => p.id === addSelect.dataset.id);
+        if (!person || !addSelect.value) return;
+        const added = addPersonToSection(person, addSelect.value);
+        commit();
+        if (added) {
+          const section = state.sections.find((s) => s.id === addSelect.value);
+          toast(`به بخش «${section?.title || ""}» هم اضافه شد`);
+        } else {
+          toast("قبلاً در این بخش بوده است");
+        }
       }
     });
 
