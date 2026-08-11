@@ -592,9 +592,17 @@
       return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
     }
 
+    function normalizeLabel(value) {
+      return String(value || "")
+        .replace(/\u200c/g, "\u200c")
+        .replace(/[\r\n\t]+/g, " ")
+        .replace(/ +/g, " ")
+        .trim();
+    }
+
     function findSectionByTitle(title) {
-      const normalized = title.trim();
-      return state.sections.find((s) => s.title.trim() === normalized);
+      const normalized = normalizeLabel(title);
+      return state.sections.find((s) => normalizeLabel(s.title) === normalized);
     }
 
     function peopleInSection(sectionId) {
@@ -604,7 +612,7 @@
     function uniqueRoles() {
       const map = new Map();
       for (const person of state.people) {
-        const role = (person.role || "").trim();
+        const role = normalizeLabel(person.role || "");
         if (!role) continue;
         if (!map.has(role)) map.set(role, 0);
         map.set(role, map.get(role) + 1);
@@ -713,7 +721,7 @@
     }
 
     function addSection(title, { silent = false } = {}) {
-      const clean = title.trim();
+      const clean = normalizeLabel(title);
       if (!clean) {
         if (!silent) toast("نام بخش را وارد کنید");
         return null;
@@ -729,16 +737,9 @@
     }
 
     function assignByRole(person) {
-      const role = (person.role || "").trim();
+      const role = normalizeLabel(person.role || "");
       if (!role) return false;
-      let section = findSectionByTitle(role);
-      if (!section) {
-        // soft match: section title contained in role or vice versa
-        section = state.sections.find((s) => {
-          const t = s.title.trim();
-          return role === t || role.includes(t) || t.includes(role);
-        });
-      }
+      const section = findSectionByTitle(role);
       if (!section) return false;
       person.sectionId = section.id;
       return true;
@@ -757,27 +758,37 @@
       return blocks.join("\n\n");
     }
 
-    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120 } = {}) {
-      const rtl = `<w:bidi w:val="1"/>`;
-      const rPr = `
+    function wordRunProps({ bold = false, size = 22 } = {}) {
+      return `
         <w:rPr>
           <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:rtl="Tahoma"/>
           ${bold ? "<w:b/><w:bCs/>" : ""}
           <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
           <w:rtl/>
         </w:rPr>`;
-      const safe = xmlEscape(text);
+    }
+
+    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120 } = {}) {
+      const rPr = wordRunProps({ bold, size });
+      const lines = String(text).split(/\n/);
+      const runs = lines.map((line, index) => {
+        const safe = xmlEscape(line);
+        const br = index < lines.length - 1 ? `<w:br/>` : "";
+        return `
+          <w:r>
+            ${rPr}
+            <w:t xml:space="preserve">${safe}</w:t>
+            ${br}
+          </w:r>`;
+      }).join("");
       return `
         <w:p>
           <w:pPr>
             <w:spacing w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
-            ${rtl}
+            <w:bidi w:val="1"/>
           </w:pPr>
-          <w:r>
-            ${rPr}
-            <w:t xml:space="preserve">${safe}</w:t>
-          </w:r>
+          ${runs}
         </w:p>`;
     }
 
@@ -1009,7 +1020,7 @@
       const person = state.people.find((p) => p.id === btn.dataset.id);
       if (!person) return;
       if (!assignByRole(person)) {
-        const role = (person.role || "").trim();
+        const role = normalizeLabel(person.role || "");
         if (!role) {
           toast("این فرد سمت ندارد");
           return;
@@ -1038,7 +1049,7 @@
         if (!section) return;
         const next = prompt("نام جدید بخش:", section.title);
         if (next === null) return;
-        const clean = next.trim();
+        const clean = normalizeLabel(next);
         if (!clean) {
           toast("نام بخش نمی‌تواند خالی باشد");
           return;
