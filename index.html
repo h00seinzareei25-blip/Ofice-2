@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>تفکیک مشخصات مهمانان</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #eef2f0;
+      --bg-deep: #e2e8e4;
+      --surface: #fbfcfb;
+      --ink: #1a2420;
+      --muted: #5c6b64;
+      --line: #c9d4ce;
+      --accent: #0f6b4c;
+      --accent-soft: #d8efe6;
+      --accent-hover: #0b563d;
+      --warn: #9a4a1c;
+      --danger: #8b2e2e;
+      --shadow: 0 10px 30px rgba(26, 36, 32, 0.08);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Vazirmatn", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 420px at 100% -10%, #d7ebe2 0%, transparent 55%),
+        radial-gradient(700px 380px at 0% 100%, #dfe6e2 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2rem 0 3rem;
+    }
+
+    header {
+      display: grid;
+      gap: 0.55rem;
+      margin-bottom: 1.5rem;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.55rem, 2.4vw, 2.1rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 46rem;
+      line-height: 1.7;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .drop {
+      padding: 1.4rem;
+      display: grid;
+      gap: 1rem;
+      justify-items: center;
+      text-align: center;
+      border: 1.5px dashed #9db5a8;
+      background:
+        linear-gradient(180deg, rgba(15, 107, 76, 0.04), transparent 60%),
+        var(--surface);
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+      cursor: pointer;
+    }
+
+    .drop:hover,
+    .drop.dragover {
+      border-color: var(--accent);
+      background: #f3faf7;
+      transform: translateY(-1px);
+    }
+
+    .drop strong {
+      font-size: 1.05rem;
+    }
+
+    .drop span {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .drop input { display: none; }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      justify-content: center;
+    }
+
+    button, .btn {
+      font: inherit;
+      border: 0;
+      border-radius: 10px;
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover, .btn:hover { background: var(--accent-hover); }
+    button:active { transform: translateY(1px); }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid #9fc4b4;
+    }
+
+    button.ghost:hover { background: var(--accent-soft); }
+
+    button.danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid #e0b4b4;
+    }
+
+    button.danger:hover { background: #f8ecec; }
+
+    .status {
+      min-height: 1.4rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+      text-align: center;
+    }
+
+    .status.error { color: var(--danger); }
+    .status.ok { color: var(--accent); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.95rem 1.1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .section-head .meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .people {
+      max-height: 620px;
+      overflow: auto;
+      padding: 0.75rem;
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .person {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.75rem;
+      align-items: start;
+      padding: 0.8rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .person:hover { border-color: #a7c4b7; }
+    .person.selected {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px rgba(15, 107, 76, 0.12);
+    }
+
+    .person input { margin-top: 0.25rem; accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+
+    .person .name {
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+
+    .person .role {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .person .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+
+    .chip {
+      font-size: 0.75rem;
+      color: #355247;
+      background: #e8f2ed;
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 2rem 1rem;
+      line-height: 1.7;
+    }
+
+    .fields {
+      padding: 0.9rem;
+      display: grid;
+      gap: 0.75rem;
+      max-height: 620px;
+      overflow: auto;
+    }
+
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .field-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.7rem 0.85rem;
+      background: #f4f7f5;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .field-top h3 {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+
+    .field-top button {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.8rem;
+      border-radius: 8px;
+    }
+
+    .field ul {
+      list-style: none;
+      margin: 0;
+      padding: 0.55rem 0.85rem 0.75rem;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .field li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.55rem;
+      align-items: baseline;
+      padding: 0.35rem 0;
+      border-bottom: 1px dashed #e2e8e4;
+      line-height: 1.55;
+    }
+
+    .field li:last-child { border-bottom: 0; }
+
+    .field .idx {
+      color: var(--muted);
+      font-size: 0.8rem;
+      min-width: 1.4rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0.85rem 1.1rem;
+      border-top: 1px solid var(--line);
+      background: #f7faf8;
+    }
+
+    .table-wrap {
+      margin-top: 1rem;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      background: #fff;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 0.7rem 0.75rem;
+      text-align: right;
+      vertical-align: top;
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: #eef5f1;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+    }
+
+    tr:nth-child(even) td { background: #fbfcfb; }
+
+    .toast {
+      position: fixed;
+      bottom: 1.2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--ink);
+      color: #fff;
+      padding: 0.7rem 1rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>تفکیک مشخصات مهمانان</h1>
+      <p>
+        فایل ورد آفیش را بارگذاری کنید تا اسامی استخراج شوند. هر نفر را انتخاب کنید
+        تا نام، سمت، تاریخ تولد، کد ملی و تلفن در بخش‌های جداگانه قرار بگیرد.
+      </p>
+    </header>
+
+    <label class="panel drop" id="dropzone" for="fileInput">
+      <strong>فایل ورد (.docx) را انتخاب یا اینجا رها کنید</strong>
+      <span>می‌توانید چند فایل همزمان انتخاب کنید</span>
+      <div class="btn-row">
+        <span class="btn">انتخاب فایل</span>
+      </div>
+      <input id="fileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
+    </label>
+
+    <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
+
+    <div class="layout">
+      <section class="panel">
+        <div class="section-head">
+          <h2>لیست اسامی استخراج‌شده</h2>
+          <span class="meta" id="peopleMeta">۰ نفر</span>
+        </div>
+        <div class="people" id="peopleList">
+          <div class="empty">بعد از بارگذاری فایل، اسامی اینجا نمایش داده می‌شوند.</div>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="ghost" id="selectAllBtn" disabled>انتخاب همه</button>
+          <button type="button" class="ghost" id="clearSelectionBtn" disabled>لغو انتخاب</button>
+          <button type="button" class="danger" id="clearAllBtn" disabled>پاک‌کردن لیست</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>بخش‌های تفکیک‌شده</h2>
+          <span class="meta" id="selectedMeta">۰ انتخاب‌شده</span>
+        </div>
+        <div class="fields" id="fieldsPanel">
+          <div class="empty">یک یا چند نفر را از لیست سمت راست انتخاب کنید.</div>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="copyAllBtn" disabled>کپی همه بخش‌ها</button>
+          <button type="button" class="ghost" id="copyTableBtn" disabled>کپی جدول</button>
+          <button type="button" class="ghost" id="exportCsvBtn" disabled>خروجی CSV</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel table-wrap" id="tableSection" hidden>
+      <div class="section-head">
+        <h2>جدول افراد انتخاب‌شده</h2>
+      </div>
+      <div style="overflow:auto; max-height: 360px;">
+        <table>
+          <thead>
+            <tr>
+              <th>ردیف</th>
+              <th>نام و نام خانوادگی</th>
+              <th>سمت</th>
+              <th>تاریخ تولد</th>
+              <th>کد ملی</th>
+              <th>تلفن</th>
+            </tr>
+          </thead>
+          <tbody id="selectedTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const FIELD_DEFS = [
+      { key: "name", title: "نام و نام خانوادگی" },
+      { key: "role", title: "سمت" },
+      { key: "birthDate", title: "تاریخ تولد" },
+      { key: "nationalId", title: "کد ملی" },
+      { key: "phone", title: "تلفن" },
+    ];
+
+    const state = {
+      people: [],
+      selected: new Set(),
+    };
+
+    const els = {
+      dropzone: document.getElementById("dropzone"),
+      fileInput: document.getElementById("fileInput"),
+      status: document.getElementById("status"),
+      peopleList: document.getElementById("peopleList"),
+      peopleMeta: document.getElementById("peopleMeta"),
+      selectedMeta: document.getElementById("selectedMeta"),
+      fieldsPanel: document.getElementById("fieldsPanel"),
+      selectAllBtn: document.getElementById("selectAllBtn"),
+      clearSelectionBtn: document.getElementById("clearSelectionBtn"),
+      clearAllBtn: document.getElementById("clearAllBtn"),
+      copyAllBtn: document.getElementById("copyAllBtn"),
+      copyTableBtn: document.getElementById("copyTableBtn"),
+      exportCsvBtn: document.getElementById("exportCsvBtn"),
+      tableSection: document.getElementById("tableSection"),
+      selectedTableBody: document.getElementById("selectedTableBody"),
+      toast: document.getElementById("toast"),
+    };
+
+    function toast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => els.toast.classList.remove("show"), 2200);
+    }
+
+    function setStatus(message, type = "") {
+      els.status.textContent = message;
+      els.status.className = "status" + (type ? " " + type : "");
+    }
+
+    function toEnglishDigits(value) {
+      return String(value || "")
+        .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+        .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+    }
+
+    function normalizeText(value) {
+      return String(value || "")
+        .replace(/\u200c/g, "\u200c")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function cellText(tc) {
+      const texts = [];
+      for (const node of tc.getElementsByTagNameNS(W_NS, "t")) {
+        texts.push(node.textContent || "");
+      }
+      return normalizeText(texts.join(""));
+    }
+
+    function cellGridSpan(tc) {
+      const tcPr = tc.getElementsByTagNameNS(W_NS, "tcPr")[0];
+      if (!tcPr) return 1;
+      const gs = tcPr.getElementsByTagNameNS(W_NS, "gridSpan")[0];
+      if (!gs) return 1;
+      return Number(gs.getAttributeNS(W_NS, "val") || gs.getAttribute("w:val") || 1);
+    }
+
+    function looksLikePhone(value) {
+      const digits = toEnglishDigits(value).replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 12;
+    }
+
+    function looksLikeNationalId(value) {
+      const digits = toEnglishDigits(value).replace(/\D/g, "");
+      return digits.length === 10;
+    }
+
+    function looksLikeDate(value) {
+      const text = toEnglishDigits(value);
+      return /^\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(text);
+    }
+
+    function looksLikeRowNumber(value) {
+      const digits = toEnglishDigits(value).replace(/\D/g, "");
+      return digits.length > 0 && digits.length <= 3 && /^\d+$/.test(digits);
+    }
+
+    function parsePersonFromCells(cells, sourceFile, index) {
+      const texts = cells.map(cellText);
+      if (texts.every((t) => !t || t === "*")) return null;
+
+      const phone = texts[0] || "";
+      const nationalId = texts[1] || "";
+      const birthDate = texts[2] || "";
+      const role = texts[7] || "";
+      const name = texts[8] || "";
+      const row = texts[9] || String(index + 1);
+
+      if (!name && !role && !phone && !nationalId && !birthDate) return null;
+      if (!name && !looksLikePhone(phone) && !looksLikeNationalId(nationalId)) return null;
+      if (name && /^(تلفن|کدملی|کد ملی|تاریخ تولد|سمت|نام و نام خانوادگی|ردیف)$/.test(name)) return null;
+
+      return {
+        id: `${sourceFile}::${row}::${name}::${nationalId}::${index}`,
+        row,
+        name: name || "—",
+        role: role || "—",
+        birthDate: birthDate || "—",
+        nationalId: nationalId || "—",
+        phone: phone || "—",
+        sourceFile,
+      };
+    }
+
+    function parseDocxXml(xmlText, sourceFile) {
+      const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+      const tables = [...doc.getElementsByTagNameNS(W_NS, "tbl")];
+      const people = [];
+      const seen = new Set();
+
+      for (const table of tables) {
+        const rows = [...table.getElementsByTagNameNS(W_NS, "tr")];
+        rows.forEach((tr, index) => {
+          const cells = [...tr.children].filter((el) => el.localName === "tc");
+          if (cells.length < 8) return;
+
+          const person = parsePersonFromCells(cells, sourceFile, index);
+          if (!person) return;
+
+          const key = [person.name, person.nationalId, person.phone].join("|");
+          if (seen.has(key)) return;
+          seen.add(key);
+          people.push(person);
+        });
+      }
+
+      return people;
+    }
+
+    async function readDocxFile(file) {
+      const zip = await JSZip.loadAsync(file);
+      const docFile = zip.file("word/document.xml");
+      if (!docFile) throw new Error(`ساختار ورد نامعتبر است: ${file.name}`);
+      const xml = await docFile.async("string");
+      return parseDocxXml(xml, file.name);
+    }
+
+    function selectedPeople() {
+      return state.people.filter((p) => state.selected.has(p.id));
+    }
+
+    function renderPeople() {
+      els.peopleMeta.textContent = `${state.people.length} نفر`;
+      els.selectedMeta.textContent = `${state.selected.size} انتخاب‌شده`;
+
+      const hasPeople = state.people.length > 0;
+      els.selectAllBtn.disabled = !hasPeople;
+      els.clearSelectionBtn.disabled = state.selected.size === 0;
+      els.clearAllBtn.disabled = !hasPeople;
+      els.copyAllBtn.disabled = state.selected.size === 0;
+      els.copyTableBtn.disabled = state.selected.size === 0;
+      els.exportCsvBtn.disabled = state.selected.size === 0;
+
+      if (!hasPeople) {
+        els.peopleList.innerHTML = `<div class="empty">بعد از بارگذاری فایل، اسامی اینجا نمایش داده می‌شوند.</div>`;
+        renderFields();
+        return;
+      }
+
+      els.peopleList.innerHTML = state.people.map((person) => {
+        const checked = state.selected.has(person.id);
+        return `
+          <label class="person ${checked ? "selected" : ""}" data-id="${escapeHtml(person.id)}">
+            <input type="checkbox" ${checked ? "checked" : ""} />
+            <div>
+              <div class="name">${escapeHtml(person.name)}</div>
+              <div class="role">${escapeHtml(person.role)}</div>
+              <div class="chips">
+                <span class="chip">${escapeHtml(person.phone)}</span>
+                <span class="chip">${escapeHtml(person.nationalId)}</span>
+                <span class="chip">${escapeHtml(person.birthDate)}</span>
+              </div>
+            </div>
+          </label>
+        `;
+      }).join("");
+      renderFields();
+    }
+
+    function renderFields() {
+      const selected = selectedPeople();
+      els.tableSection.hidden = selected.length === 0;
+
+      if (!selected.length) {
+        els.fieldsPanel.innerHTML = `<div class="empty">یک یا چند نفر را از لیست سمت راست انتخاب کنید.</div>`;
+        els.selectedTableBody.innerHTML = "";
+        return;
+      }
+
+      els.fieldsPanel.innerHTML = FIELD_DEFS.map((field) => {
+        const items = selected
+          .map((person, i) => `<li><span class="idx">${i + 1}.</span><span>${escapeHtml(person[field.key])}</span></li>`)
+          .join("");
+        return `
+          <article class="field" data-field="${field.key}">
+            <div class="field-top">
+              <h3>${field.title}</h3>
+              <button type="button" class="ghost copy-field" data-field="${field.key}">کپی</button>
+            </div>
+            <ul>${items}</ul>
+          </article>
+        `;
+      }).join("");
+
+      els.selectedTableBody.innerHTML = selected.map((person, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(person.name)}</td>
+          <td>${escapeHtml(person.role)}</td>
+          <td>${escapeHtml(person.birthDate)}</td>
+          <td>${escapeHtml(person.nationalId)}</td>
+          <td>${escapeHtml(person.phone)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function fieldLines(fieldKey) {
+      return selectedPeople().map((p) => p[fieldKey]);
+    }
+
+    async function copyText(text, message) {
+      await navigator.clipboard.writeText(text);
+      toast(message);
+    }
+
+    async function handleFiles(fileList) {
+      const files = [...fileList].filter((f) => /\.docx$/i.test(f.name));
+      if (!files.length) {
+        setStatus("فقط فایل‌های .docx پشتیبانی می‌شوند.", "error");
+        return;
+      }
+
+      setStatus("در حال خواندن فایل‌ها...", "");
+      const extracted = [];
+      const errors = [];
+
+      for (const file of files) {
+        try {
+          const people = await readDocxFile(file);
+          extracted.push(...people);
+        } catch (err) {
+          console.error(err);
+          errors.push(file.name);
+        }
+      }
+
+      if (!extracted.length) {
+        setStatus(
+          errors.length
+            ? `خطا در خواندن فایل‌ها: ${errors.join("، ")}`
+            : "در فایل‌ها هیچ اسم معتبری پیدا نشد.",
+          "error"
+        );
+        return;
+      }
+
+      const existingKeys = new Set(
+        state.people.map((p) => [p.name, p.nationalId, p.phone].join("|"))
+      );
+      let added = 0;
+      for (const person of extracted) {
+        const key = [person.name, person.nationalId, person.phone].join("|");
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+        state.people.push(person);
+        added += 1;
+      }
+
+      renderPeople();
+      const msg = `${added} نفر اضافه شد` + (errors.length ? ` | خطا: ${errors.join("، ")}` : "");
+      setStatus(msg, errors.length ? "error" : "ok");
+      toast(`${added} نفر از ورد استخراج شد`);
+    }
+
+    els.dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      els.dropzone.classList.add("dragover");
+    });
+    els.dropzone.addEventListener("dragleave", () => els.dropzone.classList.remove("dragover"));
+    els.dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      els.dropzone.classList.remove("dragover");
+      handleFiles(e.dataTransfer.files);
+    });
+    els.fileInput.addEventListener("change", (e) => {
+      handleFiles(e.target.files);
+      e.target.value = "";
+    });
+
+    els.peopleList.addEventListener("change", (e) => {
+      const label = e.target.closest(".person");
+      if (!label) return;
+      const id = label.dataset.id;
+      if (e.target.checked) state.selected.add(id);
+      else state.selected.delete(id);
+      renderPeople();
+    });
+
+    els.selectAllBtn.addEventListener("click", () => {
+      state.people.forEach((p) => state.selected.add(p.id));
+      renderPeople();
+    });
+
+    els.clearSelectionBtn.addEventListener("click", () => {
+      state.selected.clear();
+      renderPeople();
+    });
+
+    els.clearAllBtn.addEventListener("click", () => {
+      state.people = [];
+      state.selected.clear();
+      renderPeople();
+      setStatus("لیست پاک شد.");
+    });
+
+    els.fieldsPanel.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".copy-field");
+      if (!btn) return;
+      const field = FIELD_DEFS.find((f) => f.key === btn.dataset.field);
+      const text = fieldLines(field.key).join("\n");
+      await copyText(text, `${field.title} کپی شد`);
+    });
+
+    els.copyAllBtn.addEventListener("click", async () => {
+      const selected = selectedPeople();
+      const blocks = FIELD_DEFS.map((field) => {
+        const lines = selected.map((p, i) => `${i + 1}. ${p[field.key]}`).join("\n");
+        return `${field.title}\n${lines}`;
+      });
+      await copyText(blocks.join("\n\n"), "همه بخش‌ها کپی شد");
+    });
+
+    els.copyTableBtn.addEventListener("click", async () => {
+      const selected = selectedPeople();
+      const header = FIELD_DEFS.map((f) => f.title).join("\t");
+      const rows = selected.map((p) =>
+        [p.name, p.role, p.birthDate, p.nationalId, p.phone].join("\t")
+      );
+      await copyText([header, ...rows].join("\n"), "جدول کپی شد");
+    });
+
+    els.exportCsvBtn.addEventListener("click", () => {
+      const selected = selectedPeople();
+      const header = FIELD_DEFS.map((f) => f.title).join(",");
+      const rows = selected.map((p) =>
+        [p.name, p.role, p.birthDate, p.nationalId, p.phone]
+          .map((v) => `"${String(v).replaceAll('"', '""')}"`)
+          .join(",")
+      );
+      const bom = "\uFEFF";
+      const blob = new Blob([bom + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "guest-fields.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("فایل CSV ذخیره شد");
+    });
+
+    renderPeople();
+  </script>
+</body>
+</html>
