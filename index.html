@@ -467,6 +467,58 @@
       line-height: 1.7;
     }
 
+    .search-panel {
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    .search-filters {
+      padding: 0.9rem 1rem;
+      display: grid;
+      gap: 0.7rem;
+      border-bottom: 1px solid var(--line);
+      background: #f7faf8;
+    }
+
+    .search-quick {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.45rem;
+    }
+
+    .search-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.55rem;
+    }
+
+    @media (max-width: 900px) {
+      .search-grid { grid-template-columns: 1fr 1fr; }
+      .search-quick { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .search-grid { grid-template-columns: 1fr; }
+    }
+
+    .search-grid label,
+    .search-filters .field-label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .search-results {
+      padding: 0.85rem 1rem 1rem;
+      max-height: 420px;
+      overflow: auto;
+    }
+
+    .search-results .modal-table {
+      margin-top: 0.35rem;
+    }
+
     .checker {
       margin-top: 1rem;
       overflow: hidden;
@@ -556,6 +608,47 @@
     </label>
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
+
+    <section class="panel search-panel">
+      <div class="section-head">
+        <h2>جست‌وجوی پیشرفته</h2>
+        <span class="meta" id="searchMeta">۰ نتیجه</span>
+      </div>
+      <div class="search-filters">
+        <div class="search-quick">
+          <input id="searchQuery" type="text" placeholder="جست‌وجوی سریع در همه فیلدها: نام، کد ملی، تلفن، سمت، فایل..." />
+          <button type="button" id="runSearchBtn">جست‌وجو</button>
+          <button type="button" class="ghost" id="clearSearchBtn">پاک کردن فیلترها</button>
+        </div>
+        <div class="search-grid">
+          <label>نام و نام خانوادگی<input id="searchName" type="text" placeholder="مثلاً شیما" /></label>
+          <label>کد ملی<input id="searchNationalId" type="text" placeholder="۱۰ رقم" /></label>
+          <label>تلفن<input id="searchPhone" type="text" placeholder="۰۹..." /></label>
+          <label>سمت<input id="searchRole" type="text" placeholder="مجری، شاعر..." /></label>
+          <label>تاریخ تولد<input id="searchBirthDate" type="text" placeholder="۱۳۷۰/۰۴/۰۵" /></label>
+          <label>فایل ورودی<input id="searchSourceFile" type="text" placeholder="نام فایل ورد" /></label>
+          <label>بخش
+            <select id="searchSection">
+              <option value="">همه بخش‌ها</option>
+            </select>
+          </label>
+          <label>وضعیت
+            <select id="searchStatus">
+              <option value="">همه</option>
+              <option value="assigned">فقط داخل بخش</option>
+              <option value="unassigned">فقط باقیمانده</option>
+              <option value="multi">عضوی چند بخش</option>
+            </select>
+          </label>
+          <label>روز ثبت (شمسی یا ISO)
+            <input id="searchRegisteredDay" type="text" placeholder="مثلاً ۱۴۰۵/۰۵/۲۰ یا 2026-08-11" />
+          </label>
+        </div>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>
+      </div>
+    </section>
 
     <div class="grid">
       <section class="panel">
@@ -670,10 +763,25 @@
       sectionModalBody: document.getElementById("sectionModalBody"),
       printSectionBtn: document.getElementById("printSectionBtn"),
       closeSectionModalBtn: document.getElementById("closeSectionModalBtn"),
+      searchMeta: document.getElementById("searchMeta"),
+      searchQuery: document.getElementById("searchQuery"),
+      searchName: document.getElementById("searchName"),
+      searchNationalId: document.getElementById("searchNationalId"),
+      searchPhone: document.getElementById("searchPhone"),
+      searchRole: document.getElementById("searchRole"),
+      searchBirthDate: document.getElementById("searchBirthDate"),
+      searchSourceFile: document.getElementById("searchSourceFile"),
+      searchSection: document.getElementById("searchSection"),
+      searchStatus: document.getElementById("searchStatus"),
+      searchRegisteredDay: document.getElementById("searchRegisteredDay"),
+      searchResults: document.getElementById("searchResults"),
+      runSearchBtn: document.getElementById("runSearchBtn"),
+      clearSearchBtn: document.getElementById("clearSearchBtn"),
       toast: document.getElementById("toast"),
     };
 
     let activeSectionId = null;
+    let lastSearchActive = false;
 
     function toast(message) {
       els.toast.textContent = message;
@@ -864,6 +972,193 @@
         .replace(/[\r\n\t]+/g, " ")
         .replace(/ +/g, " ")
         .trim();
+    }
+
+    function toEnglishDigits(value) {
+      return String(value || "")
+        .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
+        .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+    }
+
+    function compactDigits(value) {
+      return toEnglishDigits(value).replace(/\D/g, "");
+    }
+
+    function includesText(haystack, needle) {
+      const q = normalizeLabel(needle).toLowerCase();
+      if (!q) return true;
+      return normalizeLabel(haystack).toLowerCase().includes(q);
+    }
+
+    function includesDigits(haystack, needle) {
+      const q = compactDigits(needle);
+      if (!q) return true;
+      return compactDigits(haystack).includes(q);
+    }
+
+    function registeredDayMatches(iso, dayFilter) {
+      const raw = normalizeLabel(dayFilter);
+      if (!raw) return true;
+      if (!iso) return false;
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return false;
+      const isoDay = date.toISOString().slice(0, 10);
+      const faDay = date.toLocaleDateString("fa-IR");
+      const faDayLatin = toEnglishDigits(faDay).replace(/[^\d/]/g, "");
+      const filterLatin = toEnglishDigits(raw).replace(/[^\d/\-]/g, "");
+      return (
+        includesText(isoDay, raw) ||
+        includesText(faDay, raw) ||
+        includesText(faDayLatin, filterLatin) ||
+        isoDay.includes(filterLatin) ||
+        faDayLatin.includes(filterLatin.replaceAll("-", "/"))
+      );
+    }
+
+    function getSearchFilters() {
+      return {
+        query: els.searchQuery.value,
+        name: els.searchName.value,
+        nationalId: els.searchNationalId.value,
+        phone: els.searchPhone.value,
+        role: els.searchRole.value,
+        birthDate: els.searchBirthDate.value,
+        sourceFile: els.searchSourceFile.value,
+        sectionId: els.searchSection.value,
+        status: els.searchStatus.value,
+        registeredDay: els.searchRegisteredDay.value,
+      };
+    }
+
+    function hasActiveSearch(filters = getSearchFilters()) {
+      return Object.values(filters).some((v) => normalizeLabel(v));
+    }
+
+    function personMatchesSearch(person, filters = getSearchFilters()) {
+      const sectionIds = getSectionIds(person);
+      const sectionTitles = sectionTitlesForPerson(person).join(" ");
+
+      if (filters.query) {
+        const blob = [
+          person.name,
+          person.role,
+          person.birthDate,
+          person.nationalId,
+          person.phone,
+          person.sourceFile,
+          sectionTitles,
+          formatDateTime(person.registeredAt),
+          formatDateOnly(person.registeredAt),
+        ].join(" ");
+        const digitQuery = compactDigits(filters.query);
+        const queryOk = includesText(blob, filters.query) || (digitQuery ? includesDigits(blob, digitQuery) : false);
+        if (!queryOk) return false;
+      }
+
+      if (!includesText(person.name, filters.name)) return false;
+      if (!includesDigits(person.nationalId, filters.nationalId)) return false;
+      if (!includesDigits(person.phone, filters.phone)) return false;
+      if (!includesText(person.role, filters.role)) return false;
+      if (!includesText(person.birthDate, filters.birthDate) && !includesDigits(person.birthDate, filters.birthDate)) return false;
+      if (!includesText(person.sourceFile, filters.sourceFile)) return false;
+      if (filters.sectionId && !sectionIds.includes(filters.sectionId)) return false;
+
+      if (filters.status === "assigned" && !sectionIds.length) return false;
+      if (filters.status === "unassigned" && sectionIds.length) return false;
+      if (filters.status === "multi" && sectionIds.length < 2) return false;
+
+      if (!registeredDayMatches(person.registeredAt, filters.registeredDay)) return false;
+      return true;
+    }
+
+    function runAdvancedSearch() {
+      const filters = getSearchFilters();
+      lastSearchActive = hasActiveSearch(filters);
+      if (!lastSearchActive) {
+        els.searchMeta.textContent = "۰ نتیجه";
+        els.searchResults.innerHTML = `<div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>`;
+        return [];
+      }
+      const results = state.people.filter((p) => personMatchesSearch(p, filters));
+      renderSearchResults(results);
+      return results;
+    }
+
+    function renderSearchSectionOptions() {
+      const current = els.searchSection.value;
+      els.searchSection.innerHTML = `<option value="">همه بخش‌ها</option>` + state.sections
+        .map((s) => `<option value="${escapeHtml(s.id)}" ${s.id === current ? "selected" : ""}>${escapeHtml(s.title)}</option>`)
+        .join("");
+    }
+
+    function renderSearchResults(results) {
+      els.searchMeta.textContent = `${results.length} نتیجه`;
+      if (!results.length) {
+        els.searchResults.innerHTML = `<div class="empty">موردی با این فیلترها پیدا نشد.</div>`;
+        return;
+      }
+
+      els.searchResults.innerHTML = `
+        <table class="modal-table">
+          <thead>
+            <tr>
+              <th>ردیف</th>
+              <th>نام</th>
+              <th>سمت</th>
+              <th>کد ملی / تلفن</th>
+              <th>ثبت</th>
+              <th>بخش‌ها</th>
+              <th>عملیات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map((person, index) => {
+              const titles = sectionTitlesForPerson(person);
+              const ids = getSectionIds(person);
+              return `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>
+                    <div class="name">${escapeHtml(person.name)}</div>
+                    <div class="meta" style="white-space:normal;margin-top:0.2rem">${escapeHtml(person.sourceFile || "—")}</div>
+                  </td>
+                  <td>${escapeHtml(person.role || "—")}</td>
+                  <td>
+                    <div>${escapeHtml(person.nationalId || "—")}</div>
+                    <div class="meta" style="margin-top:0.2rem">${escapeHtml(person.phone || "—")}</div>
+                  </td>
+                  <td>${escapeHtml(formatDateTime(person.registeredAt))}</td>
+                  <td>${titles.length ? escapeHtml(titles.join("، ")) : "باقیمانده"}</td>
+                  <td>
+                    <div class="row-actions">
+                      ${ids.map((id) => {
+                        const title = state.sections.find((s) => s.id === id)?.title || "بخش";
+                        return `<button type="button" class="ghost small open-from-search" data-section-id="${escapeHtml(id)}">${escapeHtml(title)}</button>`;
+                      }).join("")}
+                      ${!ids.length ? `<span class="meta">هنوز در بخشی نیست</span>` : ""}
+                    </div>
+                  </td>
+                </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function clearSearchFilters() {
+      els.searchQuery.value = "";
+      els.searchName.value = "";
+      els.searchNationalId.value = "";
+      els.searchPhone.value = "";
+      els.searchRole.value = "";
+      els.searchBirthDate.value = "";
+      els.searchSourceFile.value = "";
+      els.searchSection.value = "";
+      els.searchStatus.value = "";
+      els.searchRegisteredDay.value = "";
+      lastSearchActive = false;
+      els.searchMeta.textContent = "۰ نتیجه";
+      els.searchResults.innerHTML = `<div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>`;
     }
 
     function findSectionByTitle(title) {
@@ -1090,6 +1385,11 @@
 
       renderPeople();
       renderSections();
+      renderSearchSectionOptions();
+      if (lastSearchActive) runAdvancedSearch();
+      else {
+        els.searchMeta.textContent = "۰ نتیجه";
+      }
       renderChecker(state.lastCheck);
       updateBackupMeta();
 
@@ -2197,6 +2497,54 @@
           toast("قبلاً در این بخش بوده است");
         }
       }
+    });
+
+    els.runSearchBtn.addEventListener("click", () => {
+      const results = runAdvancedSearch();
+      if (!hasActiveSearch()) {
+        toast("یک عبارت یا فیلتر وارد کنید");
+        return;
+      }
+      toast(`${results.length} نتیجه پیدا شد`);
+    });
+
+    els.clearSearchBtn.addEventListener("click", () => {
+      clearSearchFilters();
+      toast("فیلترها پاک شد");
+    });
+
+    [
+      els.searchQuery,
+      els.searchName,
+      els.searchNationalId,
+      els.searchPhone,
+      els.searchRole,
+      els.searchBirthDate,
+      els.searchSourceFile,
+      els.searchRegisteredDay,
+    ].forEach((input) => {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          els.runSearchBtn.click();
+        }
+      });
+      input.addEventListener("input", () => {
+        if (hasActiveSearch()) runAdvancedSearch();
+      });
+    });
+
+    [els.searchSection, els.searchStatus].forEach((select) => {
+      select.addEventListener("change", () => {
+        if (hasActiveSearch()) runAdvancedSearch();
+        else if (select.value) runAdvancedSearch();
+      });
+    });
+
+    els.searchResults.addEventListener("click", (e) => {
+      const btn = e.target.closest(".open-from-search");
+      if (!btn) return;
+      openSectionModal(btn.dataset.sectionId);
     });
 
     els.closeSectionModalBtn.addEventListener("click", closeSectionModal);
