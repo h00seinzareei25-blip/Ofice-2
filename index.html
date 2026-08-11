@@ -428,16 +428,18 @@
       <h1>تفکیک مهمانان در بخش‌ها</h1>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
-        اسامی دقیق می‌مانند؛ بعد از خروجی Word، چکر بررسی می‌کند چیزی از قلم نیفتاده باشد.
-        در خروجی، فیلد سمت نمایش داده نمی‌شود.
+        چکر صحت ورود، اطلاعات داخل برنامه را با فایل ورودی مقایسه می‌کند تا کسی از قلم نیفتد و داده‌ها اشتباه نباشند.
+        در خروجی Word فیلد سمت نمی‌آید.
       </p>
     </header>
 
     <div class="top-actions">
       <button type="button" class="ghost" id="downloadBackupBtn">دانلود بک‌آپ</button>
       <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
-      <button type="button" class="ghost" id="runCheckerBtn" disabled>اجرای چکر کامل بودن</button>
+      <button type="button" class="ghost" id="runCheckerBtn" disabled>چکر صحت ورود از فایل</button>
+      <button type="button" class="ghost" id="recheckInputBtn" disabled>مقایسه دوباره با فایل ورد</button>
       <input id="backupInput" type="file" accept="application/json,.json" hidden />
+      <input id="recheckInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
     </div>
 
     <label class="panel drop" id="dropzone" for="fileInput">
@@ -488,15 +490,15 @@
 
     <section class="panel checker" id="checkerPanel" hidden>
       <div class="section-head">
-        <h2>چکر کامل بودن خروجی</h2>
+        <h2>چکر صحت ورود از فایل ورودی</h2>
         <span class="meta" id="checkerMeta"></span>
       </div>
       <div class="checker-body" id="checkerBody"></div>
     </section>
 
     <p class="panel preview-note">
+      چکر بررسی می‌کند همه افراد فایل ورودی وارد برنامه شده‌اند و نام، تاریخ تولد، کد ملی و تلفن‌شان دقیقاً مثل فایل ورودی است.
       خروجی Word فقط شامل عنوان بخش و برای هر نفر: نام، تاریخ تولد، کد ملی و تلفن است.
-      سمت فقط برای چینش داخلی استفاده می‌شود و در خروجی نمی‌آید.
     </p>
   </div>
 
@@ -539,6 +541,8 @@
       restoreBackupBtn: document.getElementById("restoreBackupBtn"),
       backupInput: document.getElementById("backupInput"),
       runCheckerBtn: document.getElementById("runCheckerBtn"),
+      recheckInputBtn: document.getElementById("recheckInputBtn"),
+      recheckInput: document.getElementById("recheckInput"),
       checkerPanel: document.getElementById("checkerPanel"),
       checkerBody: document.getElementById("checkerBody"),
       checkerMeta: document.getElementById("checkerMeta"),
@@ -605,6 +609,50 @@
 
     function personKey(person) {
       return [person.name, person.nationalId, person.phone, person.role].join("||");
+    }
+
+    function identityKey(person) {
+      return [person.name, person.nationalId, person.phone].join("||");
+    }
+
+    function snapshotRecord(person) {
+      return {
+        key: personKey(person),
+        identity: identityKey(person),
+        name: person.name,
+        birthDate: person.birthDate || "",
+        nationalId: person.nationalId || "",
+        phone: person.phone || "",
+        role: person.role || "",
+        sourceFile: person.sourceFile || "",
+        row: person.row || "",
+      };
+    }
+
+    function fieldDiffs(inputRecord, current) {
+      const diffs = [];
+      if ((current.name || "") !== (inputRecord.name || "")) diffs.push("نام");
+      if ((current.birthDate || "") !== (inputRecord.birthDate || "")) diffs.push("تاریخ تولد");
+      if ((current.nationalId || "") !== (inputRecord.nationalId || "")) diffs.push("کد ملی");
+      if ((current.phone || "") !== (inputRecord.phone || "")) diffs.push("تلفن");
+      return diffs;
+    }
+
+    function findPersonForRecord(record) {
+      return state.people.find((p) => personKey(p) === record.key)
+        || state.people.find((p) => identityKey(p) === record.identity)
+        || null;
+    }
+
+    function allInputRecords() {
+      const map = new Map();
+      for (const batch of state.batches) {
+        const records = batch.records || [];
+        for (const record of records) {
+          if (!map.has(record.key)) map.set(record.key, record);
+        }
+      }
+      return [...map.values()];
     }
 
     function parsePersonFromCells(cells, sourceFile, index) {
@@ -764,7 +812,15 @@
         sectionId: p.sectionId || UNASSIGNED,
       }));
       state.sections = payload.sections;
-      state.batches = Array.isArray(payload.batches) ? payload.batches : [];
+      state.batches = (Array.isArray(payload.batches) ? payload.batches : []).map((batch) => {
+        if (Array.isArray(batch.records) && batch.records.length) return batch;
+        // migrate older backups that only stored keys
+        const records = (batch.personKeys || [])
+          .map((key) => state.people.find((p) => personKey(p) === key))
+          .filter(Boolean)
+          .map(snapshotRecord);
+        return { ...batch, records, personKeys: records.map((r) => r.key) };
+      });
       state.lastCheck = payload.lastCheck || null;
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
     }
@@ -810,7 +866,8 @@
       els.exportWordBtn.disabled = !(hasSections && assignedCount);
       els.copySummaryBtn.disabled = !(hasSections && assignedCount);
       els.clearSectionsBtn.disabled = !hasSections;
-      els.runCheckerBtn.disabled = !hasPeople;
+      els.runCheckerBtn.disabled = !hasPeople || !state.batches.length;
+      els.recheckInputBtn.disabled = !hasPeople;
 
       renderPeople();
       renderSections();
@@ -978,47 +1035,100 @@
         </w:p>`;
     }
 
-    function runCompletenessCheck({ exportedIds = null, source = "manual" } = {}) {
-      const exportedSet = exportedIds
-        ? new Set(exportedIds)
-        : new Set(assignedPeople().map((p) => p.id));
+    function runCompletenessCheck({ exportedIds = null, liveRecords = null, source = "manual" } = {}) {
+      const inputRecords = liveRecords && liveRecords.length
+        ? liveRecords
+        : allInputRecords();
 
-      const missingUnassigned = state.people.filter((p) => !p.sectionId);
-      const missingFromExport = state.people.filter((p) => !exportedSet.has(p.id));
-      const incompleteFields = state.people.filter((p) =>
-        !normalizeLabel(p.name) || !normalizeLabel(p.birthDate) || !normalizeLabel(p.nationalId) || !normalizeLabel(p.phone)
-      );
+      const exportedSet = exportedIds ? new Set(exportedIds) : null;
+      const missingFromProgram = [];
+      const alteredInProgram = [];
+      const missingFromExport = [];
+      const matched = [];
+
+      for (const record of inputRecords) {
+        const person = findPersonForRecord(record);
+        if (!person) {
+          missingFromProgram.push({
+            name: record.name,
+            sourceFile: record.sourceFile,
+            nationalId: record.nationalId,
+            phone: record.phone,
+          });
+          continue;
+        }
+
+        const diffs = fieldDiffs(record, person);
+        if (diffs.length) {
+          alteredInProgram.push({
+            name: record.name,
+            sourceFile: record.sourceFile,
+            diffs,
+            expected: {
+              name: record.name,
+              birthDate: record.birthDate,
+              nationalId: record.nationalId,
+              phone: record.phone,
+            },
+            actual: {
+              name: person.name,
+              birthDate: person.birthDate,
+              nationalId: person.nationalId,
+              phone: person.phone,
+            },
+          });
+        } else {
+          matched.push(record.name);
+        }
+
+        if (exportedSet && !exportedSet.has(person.id)) {
+          missingFromExport.push({
+            name: person.name,
+            sourceFile: person.sourceFile || record.sourceFile,
+            reason: person.sectionId ? "در خروجی Word نبود" : "وارد برنامه شده ولی در بخشی برای خروجی قرار نگرفته",
+          });
+        }
+      }
 
       const byBatch = state.batches.map((batch) => {
-        const batchPeople = state.people.filter((p) => batch.personKeys.includes(personKey(p)));
-        const missing = batchPeople.filter((p) => !exportedSet.has(p.id));
+        const records = batch.records || [];
+        const missing = [];
+        const altered = [];
+        for (const record of records) {
+          const person = findPersonForRecord(record);
+          if (!person) {
+            missing.push(record.name);
+            continue;
+          }
+          if (fieldDiffs(record, person).length) altered.push(record.name);
+        }
         return {
           sourceFiles: batch.sourceFiles,
-          total: batchPeople.length,
+          total: records.length,
           missingCount: missing.length,
-          missingNames: missing.map((p) => p.name),
+          alteredCount: altered.length,
+          missingNames: missing,
+          alteredNames: altered,
+          ok: missing.length === 0 && altered.length === 0,
         };
       });
 
-      const ok = missingFromExport.length === 0 && incompleteFields.length === 0;
+      const ok = missingFromProgram.length === 0
+        && alteredInProgram.length === 0
+        && (!exportedSet || missingFromExport.length === 0);
+
       const result = {
         at: new Date().toISOString(),
         source,
-        totalPeople: state.people.length,
-        exportedCount: exportedSet.size,
-        missingUnassigned: missingUnassigned.map((p) => ({ id: p.id, name: p.name, sourceFile: p.sourceFile })),
-        missingFromExport: missingFromExport.map((p) => ({ id: p.id, name: p.name, sourceFile: p.sourceFile, reason: p.sectionId ? "در خروجی نبود" : "در بخشی قرار نگرفته" })),
-        incompleteFields: incompleteFields.map((p) => ({
-          id: p.id,
-          name: p.name,
-          missing: [
-            !normalizeLabel(p.name) ? "نام" : null,
-            !normalizeLabel(p.birthDate) ? "تاریخ تولد" : null,
-            !normalizeLabel(p.nationalId) ? "کد ملی" : null,
-            !normalizeLabel(p.phone) ? "تلفن" : null,
-          ].filter(Boolean),
-        })),
+        inputCount: inputRecords.length,
+        programCount: state.people.length,
+        matchedCount: matched.length,
+        exportedCount: exportedSet ? exportedSet.size : null,
+        missingFromProgram,
+        alteredInProgram,
+        missingFromExport,
         byBatch,
+        usedLiveFile: Boolean(liveRecords && liveRecords.length),
         ok,
       };
 
@@ -1033,43 +1143,73 @@
         return;
       }
 
+      const hasProblem = !result.ok;
       els.checkerPanel.hidden = false;
-      els.checkerPanel.className = `panel checker ${result.ok ? "pass" : (result.missingFromExport.length ? "fail" : "warn")}`;
+      els.checkerPanel.className = `panel checker ${result.ok ? "pass" : "fail"}`;
       els.checkerMeta.textContent = formatDateTime(result.at);
 
-      const missingList = result.missingFromExport.length
-        ? `<div class="checker-block"><h3>از قلم افتاده‌ها (${result.missingFromExport.length})</h3><ul>${
-            result.missingFromExport.map((p) => `<li><strong>${escapeHtml(p.name)}</strong> — ${escapeHtml(p.reason)}${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""}</li>`).join("")
+      const missingProgramList = result.missingFromProgram.length
+        ? `<div class="checker-block"><h3>از فایل ورودی وارد برنامه نشده‌اند (${result.missingFromProgram.length})</h3><ul>${
+            result.missingFromProgram.map((p) =>
+              `<li><strong>${escapeHtml(p.name)}</strong>${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""} | کد ملی: ${escapeHtml(p.nationalId || "—")} | تلفن: ${escapeHtml(p.phone || "—")}</li>`
+            ).join("")
           }</ul></div>`
         : "";
 
-      const incompleteList = result.incompleteFields.length
-        ? `<div class="checker-block"><h3>نقص فیلدها (${result.incompleteFields.length})</h3><ul>${
-            result.incompleteFields.map((p) => `<li><strong>${escapeHtml(p.name)}</strong> — کمبود: ${escapeHtml(p.missing.join("، "))}</li>`).join("")
+      const alteredList = result.alteredInProgram.length
+        ? `<div class="checker-block"><h3>اطلاعات اشتباه نسبت به فایل ورودی (${result.alteredInProgram.length})</h3><ul>${
+            result.alteredInProgram.map((p) =>
+              `<li><strong>${escapeHtml(p.name)}</strong> — فیلدهای متفاوت: ${escapeHtml(p.diffs.join("، "))}<br/>
+                ورودی: ${escapeHtml(p.expected.name)} / ${escapeHtml(p.expected.birthDate || "—")} / ${escapeHtml(p.expected.nationalId || "—")} / ${escapeHtml(p.expected.phone || "—")}<br/>
+                برنامه: ${escapeHtml(p.actual.name)} / ${escapeHtml(p.actual.birthDate || "—")} / ${escapeHtml(p.actual.nationalId || "—")} / ${escapeHtml(p.actual.phone || "—")}
+              </li>`
+            ).join("")
+          }</ul></div>`
+        : "";
+
+      const missingExportList = result.missingFromExport.length
+        ? `<div class="checker-block"><h3>وارد برنامه شده‌اند ولی در خروجی نیستند (${result.missingFromExport.length})</h3><ul>${
+            result.missingFromExport.map((p) =>
+              `<li><strong>${escapeHtml(p.name)}</strong> — ${escapeHtml(p.reason)}${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""}</li>`
+            ).join("")
           }</ul></div>`
         : "";
 
       const batchList = result.byBatch.length
-        ? `<div class="checker-block"><h3>بررسی نسبت به فایل‌های ورودی</h3><ul>${
+        ? `<div class="checker-block"><h3>جزئیات هر فایل ورودی</h3><ul>${
             result.byBatch.map((b) => {
               const files = escapeHtml((b.sourceFiles || []).join("، ") || "بدون نام");
-              if (b.missingCount === 0) {
-                return `<li>${files}: کامل (${b.total} نفر)</li>`;
-              }
-              return `<li>${files}: ${b.missingCount} نفر از قلم افتاده — ${escapeHtml(b.missingNames.join("، "))}</li>`;
+              if (b.ok) return `<li>${files}: کامل — ${b.total} نفر درست وارد برنامه شده‌اند</li>`;
+              const parts = [];
+              if (b.missingCount) parts.push(`${b.missingCount} نفر جاافتاده (${escapeHtml(b.missingNames.join("، "))})`);
+              if (b.alteredCount) parts.push(`${b.alteredCount} نفر با داده اشتباه (${escapeHtml(b.alteredNames.join("، "))})`);
+              return `<li>${files}: ${parts.join(" | ")}</li>`;
             }).join("")
           }</ul></div>`
         : "";
 
-      const summary = result.ok
-        ? `همه‌چیز کامل است. ${result.exportedCount} از ${result.totalPeople} نفر در خروجی هستند و فیلد ناقصی نیست.`
-        : `توجه: ${result.missingFromExport.length} نفر از خروجی جا مانده‌اند` +
-          (result.incompleteFields.length ? ` و ${result.incompleteFields.length} نفر فیلد ناقص دارند.` : ".");
+      let summary;
+      if (!result.inputCount) {
+        summary = "هنوز اسنپ‌شات ورودی برای مقایسه وجود ندارد. یک فایل ورد بارگذاری کنید یا با «مقایسه دوباره با فایل ورد» فایل را دوباره بدهید.";
+        els.checkerPanel.className = "panel checker warn";
+      } else if (result.ok) {
+        summary = result.exportedCount !== null
+          ? `صحت ورود تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر فایل ورودی درست در برنامه‌اند و همه در خروجی هستند.`
+          : `صحت ورود تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر فایل ورودی با اطلاعات دقیق در برنامه‌اند.` +
+            (result.usedLiveFile ? " (مقایسه زنده با فایل ورد)" : "");
+      } else {
+        const bits = [];
+        if (result.missingFromProgram.length) bits.push(`${result.missingFromProgram.length} نفر از ورود جا مانده‌اند`);
+        if (result.alteredInProgram.length) bits.push(`${result.alteredInProgram.length} نفر اطلاعات اشتباه دارند`);
+        if (result.missingFromExport.length) bits.push(`${result.missingFromExport.length} نفر در خروجی نیستند`);
+        summary = `اشکال در صحت ورود/خروجی: ${bits.join("، ")}.`;
+      }
 
       els.checkerBody.innerHTML = `
         <div class="checker-summary">${summary}</div>
-        ${missingList}
-        ${incompleteList}
+        ${missingProgramList}
+        ${alteredList}
+        ${missingExportList}
         ${batchList}
       `;
     }
@@ -1151,9 +1291,10 @@
       render();
 
       if (check.ok) {
-        toast("خروجی Word آماده شد — چکر: کامل");
+        toast("خروجی Word آماده شد — صحت ورود تأیید شد");
       } else {
-        toast(`خروجی گرفته شد — ${check.missingFromExport.length} نفر از قلم افتاده`);
+        const missed = check.missingFromProgram.length + check.alteredInProgram.length + check.missingFromExport.length;
+        toast(`خروجی گرفته شد — چکر ${missed} مورد مشکوک پیدا کرد`);
       }
     }
 
@@ -1199,22 +1340,75 @@
         addedPeople.push(person);
       }
 
+      const records = extracted.map(snapshotRecord);
       state.batches.push({
         id: uid("batch"),
         at: new Date().toISOString(),
         sourceFiles,
-        personKeys: extracted.map(personKey),
+        personKeys: records.map((r) => r.key),
+        records,
         addedCount: addedPeople.length,
       });
 
-      state.lastCheck = null;
+      const check = runCompletenessCheck({ source: "import" });
       commit();
       setStatus(
         `${addedPeople.length} نفر اضافه شد (مجموع: ${state.people.length})` +
+          (check.ok ? " | چکر ورود: کامل" : " | چکر ورود: مغایرت دارد") +
           (errors.length ? ` | خطا: ${errors.join("، ")}` : ""),
-        errors.length ? "error" : "ok"
+        errors.length || !check.ok ? "error" : "ok"
       );
-      toast(`${addedPeople.length} نفر به لیست انباشته اضافه شد`);
+      toast(check.ok
+        ? `${addedPeople.length} نفر اضافه شد — صحت ورود تأیید شد`
+        : `${addedPeople.length} نفر اضافه شد — چکر مغایرت ورود پیدا کرد`);
+    }
+
+    async function recheckAgainstWordFiles(fileList) {
+      const files = [...fileList].filter((f) => /\.docx$/i.test(f.name));
+      if (!files.length) {
+        toast("فایل ورد انتخاب نشده است");
+        return;
+      }
+
+      setStatus("در حال مقایسه دوباره با فایل ورودی...", "");
+      const livePeople = [];
+      const errors = [];
+      for (const file of files) {
+        try {
+          livePeople.push(...await readDocxFile(file));
+        } catch (err) {
+          console.error(err);
+          errors.push(file.name);
+        }
+      }
+
+      if (!livePeople.length) {
+        setStatus("از فایل انتخاب‌شده فردی خوانده نشد.", "error");
+        return;
+      }
+
+      const liveRecords = livePeople.map(snapshotRecord);
+      // also refresh/merge snapshot batch so future checks keep this source of truth
+      state.batches.push({
+        id: uid("batch"),
+        at: new Date().toISOString(),
+        sourceFiles: files.map((f) => f.name),
+        personKeys: liveRecords.map((r) => r.key),
+        records: liveRecords,
+        addedCount: 0,
+        recheckOnly: true,
+      });
+
+      const check = runCompletenessCheck({ liveRecords, source: "live-recheck" });
+      commit();
+      setStatus(
+        check.ok
+          ? `مقایسه زنده موفق: ${check.matchedCount} نفر مطابق فایل ورودی`
+          : `مقایسه زنده: ${check.missingFromProgram.length} جاافتاده، ${check.alteredInProgram.length} اشتباه`,
+        check.ok ? "ok" : "error"
+      );
+      toast(check.ok ? "مقایسه با فایل ورودی: کامل" : "مغایرت با فایل ورودی پیدا شد");
+      if (errors.length) setStatus(`خطا در برخی فایل‌ها: ${errors.join("، ")}`, "error");
     }
 
     els.dropzone.addEventListener("dragover", (e) => {
@@ -1343,7 +1537,18 @@
       persistBackup();
       renderChecker(check);
       render();
-      toast(check.ok ? "چکر: کامل است" : "چکر: موارد جاافتاده دارد");
+      toast(check.ok ? "چکر ورود: کامل است" : "چکر ورود: مغایرت دارد");
+    });
+
+    els.recheckInputBtn.addEventListener("click", () => {
+      els.recheckInput.click();
+    });
+
+    els.recheckInput.addEventListener("change", async (e) => {
+      const files = e.target.files;
+      e.target.value = "";
+      if (!files?.length) return;
+      await recheckAgainstWordFiles(files);
     });
 
     els.peopleList.addEventListener("change", (e) => {
