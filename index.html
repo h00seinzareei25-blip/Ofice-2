@@ -375,7 +375,7 @@
     .modal-backdrop[hidden] { display: none; }
 
     .modal {
-      width: min(720px, 100%);
+      width: min(980px, 100%);
       max-height: min(86vh, 900px);
       overflow: auto;
       background: #fff;
@@ -433,6 +433,12 @@
 
     .modal-table tr:nth-child(even) td {
       background: #fbfcfb;
+    }
+
+    .modal-table select {
+      min-width: 150px;
+      font-size: 0.84rem;
+      padding: 0.35rem 0.45rem;
     }
 
     .preview-note {
@@ -794,6 +800,8 @@
         phone,
         sourceFile,
         sectionId: UNASSIGNED,
+        registeredAt: null,
+        assignedAt: null,
       };
     }
 
@@ -867,9 +875,41 @@
     function formatDateTime(iso) {
       if (!iso) return "—";
       try {
-        return new Date(iso).toLocaleString("fa-IR");
+        return new Date(iso).toLocaleString("fa-IR", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
       } catch {
         return iso;
+      }
+    }
+
+    function formatDateOnly(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleDateString("fa-IR");
+      } catch {
+        return iso;
+      }
+    }
+
+    function nowIso() {
+      return new Date().toISOString();
+    }
+
+    function assignPerson(person, sectionId) {
+      const next = sectionId || UNASSIGNED;
+      const prev = person.sectionId || UNASSIGNED;
+      person.sectionId = next;
+      if (next && next !== prev) {
+        person.assignedAt = nowIso();
+      }
+      if (!next) {
+        person.assignedAt = null;
       }
     }
 
@@ -925,6 +965,8 @@
       state.people = payload.people.map((p) => ({
         ...p,
         sectionId: p.sectionId || UNASSIGNED,
+        registeredAt: p.registeredAt || payload.savedAt || null,
+        assignedAt: p.assignedAt || (p.sectionId ? payload.savedAt || null : null),
       }));
       state.sections = payload.sections;
       state.batches = (Array.isArray(payload.batches) ? payload.batches : []).map((batch) => {
@@ -997,8 +1039,8 @@
       }
     }
 
-    function sectionOptions(selectedId) {
-      const options = [`<option value="">— انتخاب بخش —</option>`];
+    function sectionOptions(selectedId, { includeEmpty = true, emptyLabel = "— انتخاب بخش —" } = {}) {
+      const options = includeEmpty ? [`<option value="">${escapeHtml(emptyLabel)}</option>`] : [];
       for (const section of state.sections) {
         const selected = section.id === selectedId ? "selected" : "";
         options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(section.title)}</option>`);
@@ -1081,9 +1123,11 @@
             <tr>
               <th>ردیف</th>
               <th>نام و نام خانوادگی</th>
+              <th>تاریخ و ساعت ثبت</th>
               <th>تاریخ تولد</th>
               <th>کد ملی</th>
               <th>تلفن</th>
+              <th>تغییر بخش</th>
             </tr>
           </thead>
           <tbody>
@@ -1092,11 +1136,20 @@
                 <td>${index + 1}</td>
                 <td>
                   <div class="name">${escapeHtml(person.name)}</div>
-                  <button type="button" class="ghost small remove-from-section" data-id="${escapeHtml(person.id)}" style="margin-top:0.35rem">بازگشت به لیست اصلی</button>
+                  <div class="role" style="margin-top:0.2rem">${escapeHtml(person.role || "بدون سمت")}</div>
+                </td>
+                <td>
+                  <div>${escapeHtml(formatDateTime(person.registeredAt))}</div>
+                  <div class="meta" style="margin-top:0.2rem;white-space:normal">روز: ${escapeHtml(formatDateOnly(person.registeredAt))}</div>
                 </td>
                 <td>${escapeHtml(person.birthDate || "—")}</td>
                 <td>${escapeHtml(person.nationalId || "—")}</td>
                 <td>${escapeHtml(person.phone || "—")}</td>
+                <td>
+                  <select class="move-section-select" data-id="${escapeHtml(person.id)}" aria-label="تغییر بخش ${escapeHtml(person.name)}">
+                    ${sectionOptions(person.sectionId, { emptyLabel: "— بازگشت به لیست اصلی —" })}
+                  </select>
+                </td>
               </tr>
             `).join("")}
           </tbody>
@@ -1138,6 +1191,7 @@
         <tr>
           <td>${index + 1}</td>
           <td>${escapeHtml(person.name)}</td>
+          <td>${escapeHtml(formatDateTime(person.registeredAt))}</td>
           <td>${escapeHtml(person.birthDate || "—")}</td>
           <td>${escapeHtml(person.nationalId || "—")}</td>
           <td>${escapeHtml(person.phone || "—")}</td>
@@ -1165,6 +1219,7 @@
       <tr>
         <th>ردیف</th>
         <th>نام و نام خانوادگی</th>
+        <th>تاریخ و ساعت ثبت</th>
         <th>تاریخ تولد</th>
         <th>کد ملی</th>
         <th>تلفن</th>
@@ -1210,7 +1265,7 @@
       if (!role) return false;
       const section = findSectionByTitle(role);
       if (!section) return false;
-      person.sectionId = section.id;
+      assignPerson(person, section.id);
       return true;
     }
 
@@ -1662,10 +1717,13 @@
 
       const existingKeys = new Set(state.people.map(personKey));
       const addedPeople = [];
+      const registeredAt = nowIso();
       for (const person of extracted) {
         const key = personKey(person);
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
+        person.registeredAt = registeredAt;
+        person.assignedAt = null;
         state.people.push(person);
         addedPeople.push(person);
       }
@@ -1804,7 +1862,7 @@
     });
 
     els.unassignAllBtn.addEventListener("click", () => {
-      state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
+      state.people.forEach((p) => assignPerson(p, UNASSIGNED));
       commit();
       toast("همه از بخش‌ها خارج شدند");
     });
@@ -1820,7 +1878,7 @@
 
     els.clearSectionsBtn.addEventListener("click", () => {
       state.sections = [];
-      state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
+      state.people.forEach((p) => assignPerson(p, UNASSIGNED));
       commit();
       toast("همه بخش‌ها حذف شدند");
     });
@@ -1892,7 +1950,7 @@
       if (!select) return;
       const person = state.people.find((p) => p.id === select.dataset.id);
       if (!person) return;
-      person.sectionId = select.value || UNASSIGNED;
+      assignPerson(person, select.value || UNASSIGNED);
       commit();
     });
 
@@ -1908,7 +1966,7 @@
           return;
         }
         const section = addSection(role, { silent: true });
-        person.sectionId = section.id;
+        assignPerson(person, section.id);
         toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
       } else {
         toast("در بخش مربوط به سمت قرار گرفت");
@@ -1945,7 +2003,7 @@
         const sectionId = deleteBtn.dataset.sectionId;
         state.sections = state.sections.filter((s) => s.id !== sectionId);
         state.people.forEach((p) => {
-          if (p.sectionId === sectionId) p.sectionId = UNASSIGNED;
+          if (p.sectionId === sectionId) assignPerson(p, UNASSIGNED);
         });
         if (activeSectionId === sectionId) closeSectionModal();
         commit();
@@ -1967,14 +2025,21 @@
       openSectionModal(openTarget.dataset.sectionId);
     });
 
-    els.sectionModalBody.addEventListener("click", (e) => {
-      const removeBtn = e.target.closest(".remove-from-section");
-      if (!removeBtn) return;
-      const person = state.people.find((p) => p.id === removeBtn.dataset.id);
+    els.sectionModalBody.addEventListener("change", (e) => {
+      const select = e.target.closest(".move-section-select");
+      if (!select) return;
+      const person = state.people.find((p) => p.id === select.dataset.id);
       if (!person) return;
-      person.sectionId = UNASSIGNED;
+      const nextSectionId = select.value || UNASSIGNED;
+      const previousSectionId = person.sectionId;
+      assignPerson(person, nextSectionId);
       commit();
-      toast("به لیست اصلی برگشت");
+      if (!nextSectionId) {
+        toast("به لیست اصلی برگشت");
+      } else if (nextSectionId !== previousSectionId) {
+        const section = state.sections.find((s) => s.id === nextSectionId);
+        toast(`به بخش «${section?.title || ""}» منتقل شد`);
+      }
     });
 
     els.closeSectionModalBtn.addEventListener("click", closeSectionModal);
