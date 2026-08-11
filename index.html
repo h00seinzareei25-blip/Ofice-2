@@ -20,7 +20,11 @@
       --accent-soft: #d8efe6;
       --accent-hover: #0b563d;
       --warn: #9a4a1c;
+      --warn-soft: #fff4e8;
       --danger: #8b2e2e;
+      --danger-soft: #f8ecec;
+      --ok: #0f6b4c;
+      --ok-soft: #e7f6ef;
       --shadow: 0 10px 30px rgba(26, 36, 32, 0.08);
       --radius: 14px;
     }
@@ -47,7 +51,7 @@
     header {
       display: grid;
       gap: 0.55rem;
-      margin-bottom: 1.35rem;
+      margin-bottom: 1.1rem;
     }
 
     header h1 {
@@ -59,7 +63,7 @@
     header p {
       margin: 0;
       color: var(--muted);
-      max-width: 52rem;
+      max-width: 54rem;
       line-height: 1.75;
     }
 
@@ -68,6 +72,13 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-bottom: 0.9rem;
     }
 
     .drop {
@@ -94,9 +105,7 @@
     .drop span { color: var(--muted); font-size: 0.9rem; }
     .drop input { display: none; }
 
-    button, .btn, select {
-      font: inherit;
-    }
+    button, .btn, select, input[type="text"] { font: inherit; }
 
     button, .btn {
       border: 0;
@@ -109,10 +118,7 @@
     }
 
     button:hover, .btn:hover { background: var(--accent-hover); }
-    button:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
 
     button.ghost {
       background: transparent;
@@ -128,7 +134,7 @@
       border: 1px solid #e0b4b4;
     }
 
-    button.danger:hover { background: #f8ecec; }
+    button.danger:hover { background: var(--danger-soft); }
 
     button.small {
       padding: 0.32rem 0.65rem;
@@ -146,6 +152,13 @@
 
     .status.error { color: var(--danger); }
     .status.ok { color: var(--accent); }
+
+    .backup-meta {
+      margin: 0.55rem 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
 
     .grid {
       display: grid;
@@ -184,7 +197,7 @@
     }
 
     .people, .sections {
-      max-height: 680px;
+      max-height: 640px;
       overflow: auto;
       padding: 0.75rem;
       display: grid;
@@ -331,9 +344,7 @@
       background: #fbfcfb;
     }
 
-    .bucket-item .name {
-      font-size: 0.95rem;
-    }
+    .bucket-item .name { font-size: 0.95rem; }
 
     .bucket-item .sub {
       color: var(--muted);
@@ -342,12 +353,51 @@
       line-height: 1.45;
     }
 
-    .hint {
-      margin: 0.85rem 0 0;
+    .preview-note {
+      margin-top: 1rem;
+      padding: 0.9rem 1rem;
       color: var(--muted);
-      font-size: 0.86rem;
-      text-align: center;
-      line-height: 1.6;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    .checker {
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    .checker.pass { border-color: #9fcbb5; }
+    .checker.fail { border-color: #e0b4b4; }
+    .checker.warn { border-color: #e0c49a; }
+
+    .checker-body {
+      padding: 0.9rem 1rem 1rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .checker-summary {
+      padding: 0.75rem 0.85rem;
+      border-radius: 10px;
+      line-height: 1.7;
+      font-weight: 600;
+    }
+
+    .checker.pass .checker-summary { background: var(--ok-soft); color: var(--ok); }
+    .checker.fail .checker-summary { background: var(--danger-soft); color: var(--danger); }
+    .checker.warn .checker-summary { background: var(--warn-soft); color: var(--warn); }
+
+    .checker-block h3 {
+      margin: 0 0 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .checker-block ul {
+      margin: 0;
+      padding: 0 1.1rem 0 0;
+      display: grid;
+      gap: 0.25rem;
+      line-height: 1.55;
     }
 
     .toast {
@@ -370,14 +420,6 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-
-    .preview-note {
-      margin-top: 1rem;
-      padding: 0.9rem 1rem;
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.7;
-    }
   </style>
 </head>
 <body>
@@ -385,18 +427,27 @@
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
       <p>
-        فایل ورد آفیش را بارگذاری کنید. اسامی دقیقاً همان‌طور که در ورد هستند نگه داشته می‌شوند.
-        بخش‌های دلخواه بسازید، هر نفر را در بخش مربوط به سمتش بگذارید و در پایان خروجی Word بگیرید.
+        فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
+        اسامی دقیق می‌مانند؛ بعد از خروجی Word، چکر بررسی می‌کند چیزی از قلم نیفتاده باشد.
+        در خروجی، فیلد سمت نمایش داده نمی‌شود.
       </p>
     </header>
 
+    <div class="top-actions">
+      <button type="button" class="ghost" id="downloadBackupBtn">دانلود بک‌آپ</button>
+      <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
+      <button type="button" class="ghost" id="runCheckerBtn" disabled>اجرای چکر کامل بودن</button>
+      <input id="backupInput" type="file" accept="application/json,.json" hidden />
+    </div>
+
     <label class="panel drop" id="dropzone" for="fileInput">
       <strong>فایل ورد (.docx) را انتخاب یا اینجا رها کنید</strong>
-      <span>اسامی بدون تغییر از جدول آفیش خوانده می‌شوند</span>
+      <span>فایل‌های جدید به لیست قبلی اضافه می‌شوند و بک‌آپ می‌شوند</span>
       <div><span class="btn">انتخاب فایل</span></div>
       <input id="fileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
     </label>
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
+    <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
 
     <div class="grid">
       <section class="panel">
@@ -435,8 +486,17 @@
       </section>
     </div>
 
+    <section class="panel checker" id="checkerPanel" hidden>
+      <div class="section-head">
+        <h2>چکر کامل بودن خروجی</h2>
+        <span class="meta" id="checkerMeta"></span>
+      </div>
+      <div class="checker-body" id="checkerBody"></div>
+    </section>
+
     <p class="panel preview-note">
-      خروجی Word شامل عنوان هر بخش و لیست افراد همان بخش با نام دقیق، سمت، تاریخ تولد، کد ملی و تلفن است.
+      خروجی Word فقط شامل عنوان بخش و برای هر نفر: نام، تاریخ تولد، کد ملی و تلفن است.
+      سمت فقط برای چینش داخلی استفاده می‌شود و در خروجی نمی‌آید.
     </p>
   </div>
 
@@ -445,16 +505,23 @@
   <script>
     const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const UNASSIGNED = "";
+    const STORAGE_KEY = "guest-sorter-backup-v1";
+    const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
+    const APP_VERSION = 1;
 
     const state = {
       people: [],
       sections: [],
+      batches: [],
+      lastSavedAt: null,
+      lastCheck: null,
     };
 
     const els = {
       dropzone: document.getElementById("dropzone"),
       fileInput: document.getElementById("fileInput"),
       status: document.getElementById("status"),
+      backupMeta: document.getElementById("backupMeta"),
       peopleList: document.getElementById("peopleList"),
       peopleMeta: document.getElementById("peopleMeta"),
       sectionsList: document.getElementById("sectionsList"),
@@ -468,6 +535,13 @@
       exportWordBtn: document.getElementById("exportWordBtn"),
       copySummaryBtn: document.getElementById("copySummaryBtn"),
       clearSectionsBtn: document.getElementById("clearSectionsBtn"),
+      downloadBackupBtn: document.getElementById("downloadBackupBtn"),
+      restoreBackupBtn: document.getElementById("restoreBackupBtn"),
+      backupInput: document.getElementById("backupInput"),
+      runCheckerBtn: document.getElementById("runCheckerBtn"),
+      checkerPanel: document.getElementById("checkerPanel"),
+      checkerBody: document.getElementById("checkerBody"),
+      checkerMeta: document.getElementById("checkerMeta"),
       toast: document.getElementById("toast"),
     };
 
@@ -501,7 +575,6 @@
         .replaceAll("'", "&apos;");
     }
 
-    /** Keep exact visible text from Word; only collapse pure whitespace runs that come from XML layout. */
     function exactCellText(tc) {
       const parts = [];
       const walk = (node) => {
@@ -528,6 +601,10 @@
 
     function isHeaderLabel(text) {
       return /^(تلفن|کدملی|کد ملی|تاریخ تولد|ورود به سازمان|آنتنی|عنوان در زیرنویس|سمت|نام و نام خانوادگی|نام ونام خانوادگی|ردیف|ویژه|خودرو|عادی)$/.test(text);
+    }
+
+    function personKey(person) {
+      return [person.name, person.nationalId, person.phone, person.role].join("||");
     }
 
     function parsePersonFromCells(cells, sourceFile, index) {
@@ -570,7 +647,7 @@
           if (cells.length < 9) return;
           const person = parsePersonFromCells(cells, sourceFile, index);
           if (!person) return;
-          const key = [person.name, person.nationalId, person.phone, person.role].join("||");
+          const key = personKey(person);
           if (seen.has(key)) return;
           seen.add(key);
           people.push(person);
@@ -609,6 +686,10 @@
       return state.people.filter((p) => p.sectionId === sectionId);
     }
 
+    function assignedPeople() {
+      return state.people.filter((p) => p.sectionId);
+    }
+
     function uniqueRoles() {
       const map = new Map();
       for (const person of state.people) {
@@ -620,10 +701,104 @@
       return [...map.entries()].map(([title, count]) => ({ title, count }));
     }
 
+    function formatDateTime(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("fa-IR");
+      } catch {
+        return iso;
+      }
+    }
+
+    function buildBackupPayload() {
+      return {
+        app: "guest-sorter",
+        version: APP_VERSION,
+        savedAt: new Date().toISOString(),
+        people: state.people,
+        sections: state.sections,
+        batches: state.batches,
+        lastCheck: state.lastCheck,
+      };
+    }
+
+    function persistBackup({ downloadSnapshot = false } = {}) {
+      const payload = buildBackupPayload();
+      state.lastSavedAt = payload.savedAt;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        const history = JSON.parse(localStorage.getItem(BACKUP_HISTORY_KEY) || "[]");
+        history.unshift({
+          savedAt: payload.savedAt,
+          peopleCount: payload.people.length,
+          sectionsCount: payload.sections.length,
+          batchesCount: payload.batches.length,
+        });
+        localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+      } catch (err) {
+        console.error(err);
+        toast("ذخیره بک‌آپ خودکار ناموفق بود");
+      }
+
+      if (downloadSnapshot) downloadBackupFile(payload);
+      updateBackupMeta();
+    }
+
+    function downloadBackupFile(payload = buildBackupPayload()) {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = payload.savedAt.replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `backup-guest-sorter-${stamp}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function applyBackupPayload(payload) {
+      if (!payload || !Array.isArray(payload.people) || !Array.isArray(payload.sections)) {
+        throw new Error("ساختار بک‌آپ نامعتبر است");
+      }
+      state.people = payload.people.map((p) => ({
+        ...p,
+        sectionId: p.sectionId || UNASSIGNED,
+      }));
+      state.sections = payload.sections;
+      state.batches = Array.isArray(payload.batches) ? payload.batches : [];
+      state.lastCheck = payload.lastCheck || null;
+      state.lastSavedAt = payload.savedAt || new Date().toISOString();
+    }
+
+    function loadBackupFromStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        applyBackupPayload(JSON.parse(raw));
+        return true;
+      } catch (err) {
+        console.error(err);
+        return false;
+      }
+    }
+
+    function updateBackupMeta() {
+      const batchInfo = state.batches.length
+        ? ` | ${state.batches.length} ورودی انباشته`
+        : "";
+      els.backupMeta.textContent = state.lastSavedAt
+        ? `بک‌آپ خودکار: ${formatDateTime(state.lastSavedAt)} | ${state.people.length} نفر${batchInfo}`
+        : "بک‌آپ خودکار: هنوز ذخیره نشده";
+    }
+
+    function commit(options = {}) {
+      persistBackup(options);
+      render();
+    }
+
     function render() {
       const hasPeople = state.people.length > 0;
       const hasSections = state.sections.length > 0;
-      const assignedCount = state.people.filter((p) => p.sectionId).length;
+      const assignedCount = assignedPeople().length;
 
       els.peopleMeta.textContent = `${state.people.length} نفر / ${assignedCount} در بخش`;
       els.sectionsMeta.textContent = `${state.sections.length} بخش`;
@@ -635,9 +810,12 @@
       els.exportWordBtn.disabled = !(hasSections && assignedCount);
       els.copySummaryBtn.disabled = !(hasSections && assignedCount);
       els.clearSectionsBtn.disabled = !hasSections;
+      els.runCheckerBtn.disabled = !hasPeople;
 
       renderPeople();
       renderSections();
+      renderChecker(state.lastCheck);
+      updateBackupMeta();
     }
 
     function sectionOptions(selectedId) {
@@ -672,6 +850,7 @@
                 ${person.phone ? `<span class="chip">${escapeHtml(person.phone)}</span>` : ""}
                 ${person.nationalId ? `<span class="chip">${escapeHtml(person.nationalId)}</span>` : ""}
                 ${person.birthDate ? `<span class="chip">${escapeHtml(person.birthDate)}</span>` : ""}
+                ${person.sourceFile ? `<span class="chip">${escapeHtml(person.sourceFile)}</span>` : ""}
               </div>
             </div>
           </div>
@@ -745,14 +924,21 @@
       return true;
     }
 
+    function personExportLines(person, index) {
+      return [
+        `${index + 1}. ${person.name}`,
+        `تاریخ تولد: ${person.birthDate || "—"}`,
+        `کد ملی: ${person.nationalId || "—"}`,
+        `تلفن: ${person.phone || "—"}`,
+      ];
+    }
+
     function buildSummaryText() {
       const blocks = [];
       for (const section of state.sections) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
-        const lines = members.map((p, i) => {
-          return `${i + 1}. ${p.name}\n   سمت: ${p.role || "—"}\n   تاریخ تولد: ${p.birthDate || "—"}\n   کد ملی: ${p.nationalId || "—"}\n   تلفن: ${p.phone || "—"}`;
-        });
+        const lines = members.flatMap((p, i) => personExportLines(p, i));
         blocks.push(`${section.title}\n${lines.join("\n")}`);
       }
       return blocks.join("\n\n");
@@ -792,26 +978,121 @@
         </w:p>`;
     }
 
+    function runCompletenessCheck({ exportedIds = null, source = "manual" } = {}) {
+      const exportedSet = exportedIds
+        ? new Set(exportedIds)
+        : new Set(assignedPeople().map((p) => p.id));
+
+      const missingUnassigned = state.people.filter((p) => !p.sectionId);
+      const missingFromExport = state.people.filter((p) => !exportedSet.has(p.id));
+      const incompleteFields = state.people.filter((p) =>
+        !normalizeLabel(p.name) || !normalizeLabel(p.birthDate) || !normalizeLabel(p.nationalId) || !normalizeLabel(p.phone)
+      );
+
+      const byBatch = state.batches.map((batch) => {
+        const batchPeople = state.people.filter((p) => batch.personKeys.includes(personKey(p)));
+        const missing = batchPeople.filter((p) => !exportedSet.has(p.id));
+        return {
+          sourceFiles: batch.sourceFiles,
+          total: batchPeople.length,
+          missingCount: missing.length,
+          missingNames: missing.map((p) => p.name),
+        };
+      });
+
+      const ok = missingFromExport.length === 0 && incompleteFields.length === 0;
+      const result = {
+        at: new Date().toISOString(),
+        source,
+        totalPeople: state.people.length,
+        exportedCount: exportedSet.size,
+        missingUnassigned: missingUnassigned.map((p) => ({ id: p.id, name: p.name, sourceFile: p.sourceFile })),
+        missingFromExport: missingFromExport.map((p) => ({ id: p.id, name: p.name, sourceFile: p.sourceFile, reason: p.sectionId ? "در خروجی نبود" : "در بخشی قرار نگرفته" })),
+        incompleteFields: incompleteFields.map((p) => ({
+          id: p.id,
+          name: p.name,
+          missing: [
+            !normalizeLabel(p.name) ? "نام" : null,
+            !normalizeLabel(p.birthDate) ? "تاریخ تولد" : null,
+            !normalizeLabel(p.nationalId) ? "کد ملی" : null,
+            !normalizeLabel(p.phone) ? "تلفن" : null,
+          ].filter(Boolean),
+        })),
+        byBatch,
+        ok,
+      };
+
+      state.lastCheck = result;
+      return result;
+    }
+
+    function renderChecker(result) {
+      if (!result) {
+        els.checkerPanel.hidden = true;
+        els.checkerPanel.className = "panel checker";
+        return;
+      }
+
+      els.checkerPanel.hidden = false;
+      els.checkerPanel.className = `panel checker ${result.ok ? "pass" : (result.missingFromExport.length ? "fail" : "warn")}`;
+      els.checkerMeta.textContent = formatDateTime(result.at);
+
+      const missingList = result.missingFromExport.length
+        ? `<div class="checker-block"><h3>از قلم افتاده‌ها (${result.missingFromExport.length})</h3><ul>${
+            result.missingFromExport.map((p) => `<li><strong>${escapeHtml(p.name)}</strong> — ${escapeHtml(p.reason)}${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""}</li>`).join("")
+          }</ul></div>`
+        : "";
+
+      const incompleteList = result.incompleteFields.length
+        ? `<div class="checker-block"><h3>نقص فیلدها (${result.incompleteFields.length})</h3><ul>${
+            result.incompleteFields.map((p) => `<li><strong>${escapeHtml(p.name)}</strong> — کمبود: ${escapeHtml(p.missing.join("، "))}</li>`).join("")
+          }</ul></div>`
+        : "";
+
+      const batchList = result.byBatch.length
+        ? `<div class="checker-block"><h3>بررسی نسبت به فایل‌های ورودی</h3><ul>${
+            result.byBatch.map((b) => {
+              const files = escapeHtml((b.sourceFiles || []).join("، ") || "بدون نام");
+              if (b.missingCount === 0) {
+                return `<li>${files}: کامل (${b.total} نفر)</li>`;
+              }
+              return `<li>${files}: ${b.missingCount} نفر از قلم افتاده — ${escapeHtml(b.missingNames.join("، "))}</li>`;
+            }).join("")
+          }</ul></div>`
+        : "";
+
+      const summary = result.ok
+        ? `همه‌چیز کامل است. ${result.exportedCount} از ${result.totalPeople} نفر در خروجی هستند و فیلد ناقصی نیست.`
+        : `توجه: ${result.missingFromExport.length} نفر از خروجی جا مانده‌اند` +
+          (result.incompleteFields.length ? ` و ${result.incompleteFields.length} نفر فیلد ناقص دارند.` : ".");
+
+      els.checkerBody.innerHTML = `
+        <div class="checker-summary">${summary}</div>
+        ${missingList}
+        ${incompleteList}
+        ${batchList}
+      `;
+    }
+
     async function exportWord() {
       const bodyParts = [];
+      const exported = [];
       bodyParts.push(wordParagraph("لیست تفکیک‌شده مهمانان", { bold: true, size: 32, spaceAfter: 240 }));
 
-      let any = false;
       for (const section of state.sections) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
-        any = true;
         bodyParts.push(wordParagraph(section.title, { bold: true, size: 26, spaceAfter: 160 }));
         members.forEach((person, index) => {
+          exported.push(person);
           bodyParts.push(wordParagraph(`${index + 1}. ${person.name}`, { bold: true, size: 22, spaceAfter: 40 }));
-          bodyParts.push(wordParagraph(`سمت: ${person.role || "—"}`, { size: 20, spaceAfter: 20 }));
           bodyParts.push(wordParagraph(`تاریخ تولد: ${person.birthDate || "—"}`, { size: 20, spaceAfter: 20 }));
           bodyParts.push(wordParagraph(`کد ملی: ${person.nationalId || "—"}`, { size: 20, spaceAfter: 20 }));
           bodyParts.push(wordParagraph(`تلفن: ${person.phone || "—"}`, { size: 20, spaceAfter: 140 }));
         });
       }
 
-      if (!any) {
+      if (!exported.length) {
         toast("ابتدا افراد را در بخش‌ها قرار دهید");
         return;
       }
@@ -860,7 +1141,20 @@
       a.download = `تفکیک-مهمانان-${stamp}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-      toast("فایل Word ذخیره شد");
+
+      const check = runCompletenessCheck({
+        exportedIds: exported.map((p) => p.id),
+        source: "export",
+      });
+      persistBackup({ downloadSnapshot: true });
+      renderChecker(check);
+      render();
+
+      if (check.ok) {
+        toast("خروجی Word آماده شد — چکر: کامل");
+      } else {
+        toast(`خروجی گرفته شد — ${check.missingFromExport.length} نفر از قلم افتاده`);
+      }
     }
 
     async function handleFiles(fileList) {
@@ -873,8 +1167,10 @@
       setStatus("در حال خواندن فایل‌ها...", "");
       const extracted = [];
       const errors = [];
+      const sourceFiles = [];
 
       for (const file of files) {
+        sourceFiles.push(file.name);
         try {
           extracted.push(...await readDocxFile(file));
         } catch (err) {
@@ -893,24 +1189,32 @@
         return;
       }
 
-      const existingKeys = new Set(
-        state.people.map((p) => [p.name, p.nationalId, p.phone, p.role].join("||"))
-      );
-      let added = 0;
+      const existingKeys = new Set(state.people.map(personKey));
+      const addedPeople = [];
       for (const person of extracted) {
-        const key = [person.name, person.nationalId, person.phone, person.role].join("||");
+        const key = personKey(person);
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
         state.people.push(person);
-        added += 1;
+        addedPeople.push(person);
       }
 
-      render();
+      state.batches.push({
+        id: uid("batch"),
+        at: new Date().toISOString(),
+        sourceFiles,
+        personKeys: extracted.map(personKey),
+        addedCount: addedPeople.length,
+      });
+
+      state.lastCheck = null;
+      commit();
       setStatus(
-        `${added} نفر با نام دقیق اضافه شد` + (errors.length ? ` | خطا: ${errors.join("، ")}` : ""),
+        `${addedPeople.length} نفر اضافه شد (مجموع: ${state.people.length})` +
+          (errors.length ? ` | خطا: ${errors.join("، ")}` : ""),
         errors.length ? "error" : "ok"
       );
-      toast(`${added} نفر استخراج شد`);
+      toast(`${addedPeople.length} نفر به لیست انباشته اضافه شد`);
     }
 
     els.dropzone.addEventListener("dragover", (e) => {
@@ -932,7 +1236,7 @@
       const section = addSection(els.sectionNameInput.value);
       if (!section) return;
       els.sectionNameInput.value = "";
-      render();
+      commit();
       toast(`بخش «${section.title}» اضافه شد`);
     });
 
@@ -955,7 +1259,7 @@
         addSection(role.title, { silent: true });
         if (state.sections.length > before) created += 1;
       }
-      render();
+      commit();
       toast(`${created} بخش از روی سمت‌ها ساخته شد`);
     });
 
@@ -965,26 +1269,29 @@
         if (person.sectionId) continue;
         if (assignByRole(person)) count += 1;
       }
-      render();
+      commit();
       toast(count ? `${count} نفر در بخش مربوط به سمت‌شان قرار گرفتند` : "مورد جدیدی برای چینش خودکار نبود");
     });
 
     els.unassignAllBtn.addEventListener("click", () => {
       state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
-      render();
+      commit();
       toast("همه از بخش‌ها خارج شدند");
     });
 
     els.clearPeopleBtn.addEventListener("click", () => {
+      if (!confirm("لیست افراد و تاریخچه ورودی‌ها پاک شود؟")) return;
       state.people = [];
-      render();
+      state.batches = [];
+      state.lastCheck = null;
+      commit();
       setStatus("لیست افراد پاک شد.");
     });
 
     els.clearSectionsBtn.addEventListener("click", () => {
       state.sections = [];
       state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
-      render();
+      commit();
       toast("همه بخش‌ها حذف شدند");
     });
 
@@ -1002,7 +1309,41 @@
         return;
       }
       await navigator.clipboard.writeText(text);
-      toast("خلاصه کپی شد");
+      toast("خلاصه بدون سمت کپی شد");
+    });
+
+    els.downloadBackupBtn.addEventListener("click", () => {
+      downloadBackupFile();
+      toast("فایل بک‌آپ دانلود شد");
+    });
+
+    els.restoreBackupBtn.addEventListener("click", () => {
+      els.backupInput.click();
+    });
+
+    els.backupInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      try {
+        const payload = JSON.parse(await file.text());
+        applyBackupPayload(payload);
+        commit();
+        setStatus(`بک‌آپ بازیابی شد: ${state.people.length} نفر`, "ok");
+        toast("بک‌آپ بازیابی شد");
+      } catch (err) {
+        console.error(err);
+        setStatus("بازیابی بک‌آپ ناموفق بود.", "error");
+        toast("فایل بک‌آپ نامعتبر است");
+      }
+    });
+
+    els.runCheckerBtn.addEventListener("click", () => {
+      const check = runCompletenessCheck({ source: "manual" });
+      persistBackup();
+      renderChecker(check);
+      render();
+      toast(check.ok ? "چکر: کامل است" : "چکر: موارد جاافتاده دارد");
     });
 
     els.peopleList.addEventListener("change", (e) => {
@@ -1011,7 +1352,7 @@
       const person = state.people.find((p) => p.id === select.dataset.id);
       if (!person) return;
       person.sectionId = select.value || UNASSIGNED;
-      render();
+      commit();
     });
 
     els.peopleList.addEventListener("click", (e) => {
@@ -1031,7 +1372,7 @@
       } else {
         toast("در بخش مربوط به سمت قرار گرفت");
       }
-      render();
+      commit();
     });
 
     els.sectionsList.addEventListener("click", (e) => {
@@ -1039,7 +1380,7 @@
       if (removeBtn) {
         const person = state.people.find((p) => p.id === removeBtn.dataset.id);
         if (person) person.sectionId = UNASSIGNED;
-        render();
+        commit();
         return;
       }
 
@@ -1060,7 +1401,7 @@
           return;
         }
         section.title = clean;
-        render();
+        commit();
         return;
       }
 
@@ -1071,10 +1412,13 @@
         state.people.forEach((p) => {
           if (p.sectionId === sectionId) p.sectionId = UNASSIGNED;
         });
-        render();
+        commit();
       }
     });
 
+    if (loadBackupFromStorage()) {
+      setStatus(`بک‌آپ قبلی بازیابی شد: ${state.people.length} نفر`, "ok");
+    }
     render();
   </script>
 </body>
