@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>تفکیک مشخصات مهمانان</title>
+  <title>تفکیک مهمانان در بخش‌ها</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -39,7 +39,7 @@
     }
 
     .wrap {
-      width: min(1180px, calc(100% - 2rem));
+      width: min(1280px, calc(100% - 2rem));
       margin: 0 auto;
       padding: 2rem 0 3rem;
     }
@@ -47,21 +47,20 @@
     header {
       display: grid;
       gap: 0.55rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.35rem;
     }
 
     header h1 {
       margin: 0;
-      font-size: clamp(1.55rem, 2.4vw, 2.1rem);
+      font-size: clamp(1.5rem, 2.3vw, 2rem);
       font-weight: 700;
-      letter-spacing: -0.02em;
     }
 
     header p {
       margin: 0;
       color: var(--muted);
-      max-width: 46rem;
-      line-height: 1.7;
+      max-width: 52rem;
+      line-height: 1.75;
     }
 
     .panel {
@@ -72,16 +71,16 @@
     }
 
     .drop {
-      padding: 1.4rem;
+      padding: 1.25rem;
       display: grid;
-      gap: 1rem;
+      gap: 0.75rem;
       justify-items: center;
       text-align: center;
       border: 1.5px dashed #9db5a8;
       background:
         linear-gradient(180deg, rgba(15, 107, 76, 0.04), transparent 60%),
         var(--surface);
-      transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+      transition: border-color 0.2s ease, background 0.2s ease;
       cursor: pointer;
     }
 
@@ -89,44 +88,30 @@
     .drop.dragover {
       border-color: var(--accent);
       background: #f3faf7;
-      transform: translateY(-1px);
     }
 
-    .drop strong {
-      font-size: 1.05rem;
-    }
-
-    .drop span {
-      color: var(--muted);
-      font-size: 0.92rem;
-    }
-
+    .drop strong { font-size: 1.02rem; }
+    .drop span { color: var(--muted); font-size: 0.9rem; }
     .drop input { display: none; }
 
-    .btn-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.55rem;
-      justify-content: center;
+    button, .btn, select {
+      font: inherit;
     }
 
     button, .btn {
-      font: inherit;
       border: 0;
       border-radius: 10px;
-      padding: 0.65rem 1rem;
+      padding: 0.58rem 0.95rem;
       cursor: pointer;
       background: var(--accent);
       color: #fff;
-      transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+      transition: background 0.15s ease, opacity 0.15s ease;
     }
 
     button:hover, .btn:hover { background: var(--accent-hover); }
-    button:active { transform: translateY(1px); }
     button:disabled {
       opacity: 0.45;
       cursor: not-allowed;
-      transform: none;
     }
 
     button.ghost {
@@ -145,8 +130,15 @@
 
     button.danger:hover { background: #f8ecec; }
 
+    button.small {
+      padding: 0.32rem 0.65rem;
+      font-size: 0.8rem;
+      border-radius: 8px;
+    }
+
     .status {
-      min-height: 1.4rem;
+      min-height: 1.35rem;
+      margin: 0.7rem 0 0;
       color: var(--muted);
       font-size: 0.92rem;
       text-align: center;
@@ -155,15 +147,15 @@
     .status.error { color: var(--danger); }
     .status.ok { color: var(--accent); }
 
-    .layout {
+    .grid {
       display: grid;
-      grid-template-columns: 1.05fr 1fr;
+      grid-template-columns: 1.05fr 1.2fr;
       gap: 1rem;
       margin-top: 1rem;
     }
 
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
     }
 
     .section-head {
@@ -171,183 +163,192 @@
       align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
-      padding: 0.95rem 1.1rem;
+      padding: 0.9rem 1rem;
       border-bottom: 1px solid var(--line);
     }
 
     .section-head h2 {
       margin: 0;
-      font-size: 1.05rem;
-      font-weight: 700;
+      font-size: 1.02rem;
     }
 
-    .section-head .meta {
-      color: var(--muted);
-      font-size: 0.85rem;
+    .meta { color: var(--muted); font-size: 0.84rem; white-space: nowrap; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      padding: 0.8rem 1rem;
+      border-top: 1px solid var(--line);
+      background: #f7faf8;
     }
 
-    .people {
-      max-height: 620px;
+    .people, .sections {
+      max-height: 680px;
       overflow: auto;
       padding: 0.75rem;
       display: grid;
       gap: 0.55rem;
     }
 
-    .person {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.75rem;
-      align-items: start;
-      padding: 0.8rem 0.9rem;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-      cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .person:hover { border-color: #a7c4b7; }
-    .person.selected {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      box-shadow: inset 0 0 0 1px rgba(15, 107, 76, 0.12);
-    }
-
-    .person input { margin-top: 0.25rem; accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
-
-    .person .name {
-      font-weight: 700;
-      margin-bottom: 0.2rem;
-    }
-
-    .person .role {
-      color: var(--muted);
-      font-size: 0.88rem;
-      line-height: 1.5;
-    }
-
-    .person .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem;
-      margin-top: 0.45rem;
-    }
-
-    .chip {
-      font-size: 0.75rem;
-      color: #355247;
-      background: #e8f2ed;
-      border-radius: 999px;
-      padding: 0.15rem 0.55rem;
-    }
-
     .empty {
       color: var(--muted);
       text-align: center;
-      padding: 2rem 1rem;
+      padding: 1.8rem 1rem;
       line-height: 1.7;
     }
 
-    .fields {
-      padding: 0.9rem;
+    .person {
       display: grid;
-      gap: 0.75rem;
-      max-height: 620px;
-      overflow: auto;
+      gap: 0.55rem;
+      padding: 0.8rem 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
     }
 
-    .field {
+    .person.unassigned {
+      border-color: #d7c3a4;
+      background: #fffaf2;
+    }
+
+    .person-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.6rem;
+      align-items: start;
+    }
+
+    .name {
+      font-weight: 700;
+      font-size: 1rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .role {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.55;
+      margin-top: 0.15rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.4rem;
+    }
+
+    .chip {
+      font-size: 0.74rem;
+      color: #355247;
+      background: #e8f2ed;
+      border-radius: 999px;
+      padding: 0.14rem 0.5rem;
+      direction: ltr;
+      unicode-bidi: plaintext;
+    }
+
+    .assign-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.48rem 0.65rem;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .create-bar {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.45rem;
+      padding: 0.8rem 1rem;
+      border-bottom: 1px solid var(--line);
+      background: #f4f8f6;
+    }
+
+    @media (max-width: 700px) {
+      .create-bar { grid-template-columns: 1fr; }
+    }
+
+    .bucket {
       border: 1px solid var(--line);
       border-radius: 12px;
       background: #fff;
       overflow: hidden;
     }
 
-    .field-top {
+    .bucket-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
-      padding: 0.7rem 0.85rem;
-      background: #f4f7f5;
+      padding: 0.7rem 0.8rem;
+      background: #eef5f1;
       border-bottom: 1px solid var(--line);
     }
 
-    .field-top h3 {
+    .bucket-head h3 {
       margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .bucket-actions {
+      display: flex;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+
+    .bucket-body {
+      padding: 0.55rem 0.7rem 0.7rem;
+      display: grid;
+      gap: 0.4rem;
+      min-height: 2.4rem;
+    }
+
+    .bucket-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.5rem;
+      align-items: start;
+      padding: 0.45rem 0.5rem;
+      border: 1px dashed #d5e0da;
+      border-radius: 10px;
+      background: #fbfcfb;
+    }
+
+    .bucket-item .name {
       font-size: 0.95rem;
     }
 
-    .field-top button {
-      padding: 0.35rem 0.7rem;
-      font-size: 0.8rem;
-      border-radius: 8px;
-    }
-
-    .field ul {
-      list-style: none;
-      margin: 0;
-      padding: 0.55rem 0.85rem 0.75rem;
-      display: grid;
-      gap: 0.35rem;
-    }
-
-    .field li {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.55rem;
-      align-items: baseline;
-      padding: 0.35rem 0;
-      border-bottom: 1px dashed #e2e8e4;
-      line-height: 1.55;
-    }
-
-    .field li:last-child { border-bottom: 0; }
-
-    .field .idx {
+    .bucket-item .sub {
       color: var(--muted);
       font-size: 0.8rem;
-      min-width: 1.4rem;
+      margin-top: 0.15rem;
+      line-height: 1.45;
     }
 
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      padding: 0.85rem 1.1rem;
-      border-top: 1px solid var(--line);
-      background: #f7faf8;
+    .hint {
+      margin: 0.85rem 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      text-align: center;
+      line-height: 1.6;
     }
-
-    .table-wrap {
-      margin-top: 1rem;
-      overflow: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 720px;
-      background: #fff;
-    }
-
-    th, td {
-      border: 1px solid var(--line);
-      padding: 0.7rem 0.75rem;
-      text-align: right;
-      vertical-align: top;
-      font-size: 0.92rem;
-    }
-
-    th {
-      background: #eef5f1;
-      font-weight: 700;
-      position: sticky;
-      top: 0;
-    }
-
-    tr:nth-child(even) td { background: #fbfcfb; }
 
     .toast {
       position: fixed;
@@ -361,7 +362,7 @@
       font-size: 0.9rem;
       opacity: 0;
       transition: transform 0.25s ease, opacity 0.25s ease;
-      z-index: 20;
+      z-index: 30;
       pointer-events: none;
     }
 
@@ -369,98 +370,85 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
+
+    .preview-note {
+      margin-top: 1rem;
+      padding: 0.9rem 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>تفکیک مشخصات مهمانان</h1>
+      <h1>تفکیک مهمانان در بخش‌ها</h1>
       <p>
-        فایل ورد آفیش را بارگذاری کنید تا اسامی استخراج شوند. هر نفر را انتخاب کنید
-        تا نام، سمت، تاریخ تولد، کد ملی و تلفن در بخش‌های جداگانه قرار بگیرد.
+        فایل ورد آفیش را بارگذاری کنید. اسامی دقیقاً همان‌طور که در ورد هستند نگه داشته می‌شوند.
+        بخش‌های دلخواه بسازید، هر نفر را در بخش مربوط به سمتش بگذارید و در پایان خروجی Word بگیرید.
       </p>
     </header>
 
     <label class="panel drop" id="dropzone" for="fileInput">
       <strong>فایل ورد (.docx) را انتخاب یا اینجا رها کنید</strong>
-      <span>می‌توانید چند فایل همزمان انتخاب کنید</span>
-      <div class="btn-row">
-        <span class="btn">انتخاب فایل</span>
-      </div>
+      <span>اسامی بدون تغییر از جدول آفیش خوانده می‌شوند</span>
+      <div><span class="btn">انتخاب فایل</span></div>
       <input id="fileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
     </label>
-
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
 
-    <div class="layout">
+    <div class="grid">
       <section class="panel">
         <div class="section-head">
-          <h2>لیست اسامی استخراج‌شده</h2>
+          <h2>لیست افراد استخراج‌شده</h2>
           <span class="meta" id="peopleMeta">۰ نفر</span>
         </div>
         <div class="people" id="peopleList">
-          <div class="empty">بعد از بارگذاری فایل، اسامی اینجا نمایش داده می‌شوند.</div>
+          <div class="empty">بعد از بارگذاری فایل، اسامی اینجا می‌آیند.</div>
         </div>
         <div class="toolbar">
-          <button type="button" class="ghost" id="selectAllBtn" disabled>انتخاب همه</button>
-          <button type="button" class="ghost" id="clearSelectionBtn" disabled>لغو انتخاب</button>
-          <button type="button" class="danger" id="clearAllBtn" disabled>پاک‌کردن لیست</button>
+          <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش خودکار بر اساس سمت</button>
+          <button type="button" class="ghost" id="unassignAllBtn" disabled>خروج از همه بخش‌ها</button>
+          <button type="button" class="danger" id="clearPeopleBtn" disabled>پاک‌کردن لیست</button>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-head">
-          <h2>بخش‌های تفکیک‌شده</h2>
-          <span class="meta" id="selectedMeta">۰ انتخاب‌شده</span>
+          <h2>بخش‌های تعریف‌شده</h2>
+          <span class="meta" id="sectionsMeta">۰ بخش</span>
         </div>
-        <div class="fields" id="fieldsPanel">
-          <div class="empty">یک یا چند نفر را از لیست سمت راست انتخاب کنید.</div>
+        <div class="create-bar">
+          <input id="sectionNameInput" type="text" placeholder="نام بخش جدید، مثلاً مجری یا شاعر" />
+          <button type="button" id="addSectionBtn">افزودن بخش</button>
+          <button type="button" class="ghost" id="sectionsFromRolesBtn" disabled>ساخت از روی سمت‌ها</button>
+        </div>
+        <div class="sections" id="sectionsList">
+          <div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>
         </div>
         <div class="toolbar">
-          <button type="button" id="copyAllBtn" disabled>کپی همه بخش‌ها</button>
-          <button type="button" class="ghost" id="copyTableBtn" disabled>کپی جدول</button>
-          <button type="button" class="ghost" id="exportCsvBtn" disabled>خروجی CSV</button>
+          <button type="button" id="exportWordBtn" disabled>خروجی Word</button>
+          <button type="button" class="ghost" id="copySummaryBtn" disabled>کپی خلاصه</button>
+          <button type="button" class="danger" id="clearSectionsBtn" disabled>حذف همه بخش‌ها</button>
         </div>
       </section>
     </div>
 
-    <section class="panel table-wrap" id="tableSection" hidden>
-      <div class="section-head">
-        <h2>جدول افراد انتخاب‌شده</h2>
-      </div>
-      <div style="overflow:auto; max-height: 360px;">
-        <table>
-          <thead>
-            <tr>
-              <th>ردیف</th>
-              <th>نام و نام خانوادگی</th>
-              <th>سمت</th>
-              <th>تاریخ تولد</th>
-              <th>کد ملی</th>
-              <th>تلفن</th>
-            </tr>
-          </thead>
-          <tbody id="selectedTableBody"></tbody>
-        </table>
-      </div>
-    </section>
+    <p class="panel preview-note">
+      خروجی Word شامل عنوان هر بخش و لیست افراد همان بخش با نام دقیق، سمت، تاریخ تولد، کد ملی و تلفن است.
+    </p>
   </div>
 
   <div class="toast" id="toast" role="status"></div>
 
   <script>
     const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const FIELD_DEFS = [
-      { key: "name", title: "نام و نام خانوادگی" },
-      { key: "role", title: "سمت" },
-      { key: "birthDate", title: "تاریخ تولد" },
-      { key: "nationalId", title: "کد ملی" },
-      { key: "phone", title: "تلفن" },
-    ];
+    const UNASSIGNED = "";
 
     const state = {
       people: [],
-      selected: new Set(),
+      sections: [],
     };
 
     const els = {
@@ -469,16 +457,17 @@
       status: document.getElementById("status"),
       peopleList: document.getElementById("peopleList"),
       peopleMeta: document.getElementById("peopleMeta"),
-      selectedMeta: document.getElementById("selectedMeta"),
-      fieldsPanel: document.getElementById("fieldsPanel"),
-      selectAllBtn: document.getElementById("selectAllBtn"),
-      clearSelectionBtn: document.getElementById("clearSelectionBtn"),
-      clearAllBtn: document.getElementById("clearAllBtn"),
-      copyAllBtn: document.getElementById("copyAllBtn"),
-      copyTableBtn: document.getElementById("copyTableBtn"),
-      exportCsvBtn: document.getElementById("exportCsvBtn"),
-      tableSection: document.getElementById("tableSection"),
-      selectedTableBody: document.getElementById("selectedTableBody"),
+      sectionsList: document.getElementById("sectionsList"),
+      sectionsMeta: document.getElementById("sectionsMeta"),
+      sectionNameInput: document.getElementById("sectionNameInput"),
+      addSectionBtn: document.getElementById("addSectionBtn"),
+      sectionsFromRolesBtn: document.getElementById("sectionsFromRolesBtn"),
+      autoAssignBtn: document.getElementById("autoAssignBtn"),
+      unassignAllBtn: document.getElementById("unassignAllBtn"),
+      clearPeopleBtn: document.getElementById("clearPeopleBtn"),
+      exportWordBtn: document.getElementById("exportWordBtn"),
+      copySummaryBtn: document.getElementById("copySummaryBtn"),
+      clearSectionsBtn: document.getElementById("clearSectionsBtn"),
       toast: document.getElementById("toast"),
     };
 
@@ -494,57 +483,55 @@
       els.status.className = "status" + (type ? " " + type : "");
     }
 
-    function toEnglishDigits(value) {
-      return String(value || "")
-        .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
-        .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
     }
 
-    function normalizeText(value) {
-      return String(value || "")
-        .replace(/\u200c/g, "\u200c")
-        .replace(/\s+/g, " ")
-        .trim();
+    function xmlEscape(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&apos;");
     }
 
-    function cellText(tc) {
-      const texts = [];
-      for (const node of tc.getElementsByTagNameNS(W_NS, "t")) {
-        texts.push(node.textContent || "");
-      }
-      return normalizeText(texts.join(""));
+    /** Keep exact visible text from Word; only collapse pure whitespace runs that come from XML layout. */
+    function exactCellText(tc) {
+      const parts = [];
+      const walk = (node) => {
+        if (!node) return;
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          if (node.localName === "t") {
+            parts.push(node.textContent ?? "");
+            return;
+          }
+          if (node.localName === "tab") {
+            parts.push("\t");
+            return;
+          }
+          if (node.localName === "br" || node.localName === "cr") {
+            parts.push("\n");
+            return;
+          }
+        }
+        for (const child of node.childNodes) walk(child);
+      };
+      walk(tc);
+      return parts.join("").replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n").trim();
     }
 
-    function cellGridSpan(tc) {
-      const tcPr = tc.getElementsByTagNameNS(W_NS, "tcPr")[0];
-      if (!tcPr) return 1;
-      const gs = tcPr.getElementsByTagNameNS(W_NS, "gridSpan")[0];
-      if (!gs) return 1;
-      return Number(gs.getAttributeNS(W_NS, "val") || gs.getAttribute("w:val") || 1);
-    }
-
-    function looksLikePhone(value) {
-      const digits = toEnglishDigits(value).replace(/\D/g, "");
-      return digits.length >= 10 && digits.length <= 12;
-    }
-
-    function looksLikeNationalId(value) {
-      const digits = toEnglishDigits(value).replace(/\D/g, "");
-      return digits.length === 10;
-    }
-
-    function looksLikeDate(value) {
-      const text = toEnglishDigits(value);
-      return /^\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(text);
-    }
-
-    function looksLikeRowNumber(value) {
-      const digits = toEnglishDigits(value).replace(/\D/g, "");
-      return digits.length > 0 && digits.length <= 3 && /^\d+$/.test(digits);
+    function isHeaderLabel(text) {
+      return /^(تلفن|کدملی|کد ملی|تاریخ تولد|ورود به سازمان|آنتنی|عنوان در زیرنویس|سمت|نام و نام خانوادگی|نام ونام خانوادگی|ردیف|ویژه|خودرو|عادی)$/.test(text);
     }
 
     function parsePersonFromCells(cells, sourceFile, index) {
-      const texts = cells.map(cellText);
+      const texts = cells.map(exactCellText);
       if (texts.every((t) => !t || t === "*")) return null;
 
       const phone = texts[0] || "";
@@ -554,19 +541,19 @@
       const name = texts[8] || "";
       const row = texts[9] || String(index + 1);
 
-      if (!name && !role && !phone && !nationalId && !birthDate) return null;
-      if (!name && !looksLikePhone(phone) && !looksLikeNationalId(nationalId)) return null;
-      if (name && /^(تلفن|کدملی|کد ملی|تاریخ تولد|سمت|نام و نام خانوادگی|ردیف)$/.test(name)) return null;
+      if (!name) return null;
+      if (isHeaderLabel(name) || isHeaderLabel(role)) return null;
 
       return {
-        id: `${sourceFile}::${row}::${name}::${nationalId}::${index}`,
+        id: `${sourceFile}::${row}::${name}::${nationalId}::${phone}::${index}`,
         row,
-        name: name || "—",
-        role: role || "—",
-        birthDate: birthDate || "—",
-        nationalId: nationalId || "—",
-        phone: phone || "—",
+        name,
+        role,
+        birthDate,
+        nationalId,
+        phone,
         sourceFile,
+        sectionId: UNASSIGNED,
       };
     }
 
@@ -580,12 +567,10 @@
         const rows = [...table.getElementsByTagNameNS(W_NS, "tr")];
         rows.forEach((tr, index) => {
           const cells = [...tr.children].filter((el) => el.localName === "tc");
-          if (cells.length < 8) return;
-
+          if (cells.length < 9) return;
           const person = parsePersonFromCells(cells, sourceFile, index);
           if (!person) return;
-
-          const key = [person.name, person.nationalId, person.phone].join("|");
+          const key = [person.name, person.nationalId, person.phone, person.role].join("||");
           if (seen.has(key)) return;
           seen.add(key);
           people.push(person);
@@ -603,101 +588,268 @@
       return parseDocxXml(xml, file.name);
     }
 
-    function selectedPeople() {
-      return state.people.filter((p) => state.selected.has(p.id));
+    function uid(prefix) {
+      return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+
+    function findSectionByTitle(title) {
+      const normalized = title.trim();
+      return state.sections.find((s) => s.title.trim() === normalized);
+    }
+
+    function peopleInSection(sectionId) {
+      return state.people.filter((p) => p.sectionId === sectionId);
+    }
+
+    function uniqueRoles() {
+      const map = new Map();
+      for (const person of state.people) {
+        const role = (person.role || "").trim();
+        if (!role) continue;
+        if (!map.has(role)) map.set(role, 0);
+        map.set(role, map.get(role) + 1);
+      }
+      return [...map.entries()].map(([title, count]) => ({ title, count }));
+    }
+
+    function render() {
+      const hasPeople = state.people.length > 0;
+      const hasSections = state.sections.length > 0;
+      const assignedCount = state.people.filter((p) => p.sectionId).length;
+
+      els.peopleMeta.textContent = `${state.people.length} نفر / ${assignedCount} در بخش`;
+      els.sectionsMeta.textContent = `${state.sections.length} بخش`;
+
+      els.autoAssignBtn.disabled = !(hasPeople && hasSections);
+      els.unassignAllBtn.disabled = !assignedCount;
+      els.clearPeopleBtn.disabled = !hasPeople;
+      els.sectionsFromRolesBtn.disabled = !hasPeople;
+      els.exportWordBtn.disabled = !(hasSections && assignedCount);
+      els.copySummaryBtn.disabled = !(hasSections && assignedCount);
+      els.clearSectionsBtn.disabled = !hasSections;
+
+      renderPeople();
+      renderSections();
+    }
+
+    function sectionOptions(selectedId) {
+      const options = [`<option value="">— بدون بخش —</option>`];
+      for (const section of state.sections) {
+        const selected = section.id === selectedId ? "selected" : "";
+        options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(section.title)}</option>`);
+      }
+      return options.join("");
     }
 
     function renderPeople() {
-      els.peopleMeta.textContent = `${state.people.length} نفر`;
-      els.selectedMeta.textContent = `${state.selected.size} انتخاب‌شده`;
-
-      const hasPeople = state.people.length > 0;
-      els.selectAllBtn.disabled = !hasPeople;
-      els.clearSelectionBtn.disabled = state.selected.size === 0;
-      els.clearAllBtn.disabled = !hasPeople;
-      els.copyAllBtn.disabled = state.selected.size === 0;
-      els.copyTableBtn.disabled = state.selected.size === 0;
-      els.exportCsvBtn.disabled = state.selected.size === 0;
-
-      if (!hasPeople) {
-        els.peopleList.innerHTML = `<div class="empty">بعد از بارگذاری فایل، اسامی اینجا نمایش داده می‌شوند.</div>`;
-        renderFields();
+      if (!state.people.length) {
+        els.peopleList.innerHTML = `<div class="empty">بعد از بارگذاری فایل، اسامی اینجا می‌آیند.</div>`;
         return;
       }
 
-      els.peopleList.innerHTML = state.people.map((person) => {
-        const checked = state.selected.has(person.id);
-        return `
-          <label class="person ${checked ? "selected" : ""}" data-id="${escapeHtml(person.id)}">
-            <input type="checkbox" ${checked ? "checked" : ""} />
+      const sorted = [...state.people].sort((a, b) => {
+        const aUn = a.sectionId ? 1 : 0;
+        const bUn = b.sectionId ? 1 : 0;
+        if (aUn !== bUn) return aUn - bUn;
+        return Number(a.row) - Number(b.row);
+      });
+
+      els.peopleList.innerHTML = sorted.map((person) => `
+        <article class="person ${person.sectionId ? "" : "unassigned"}" data-id="${escapeHtml(person.id)}">
+          <div class="person-top">
             <div>
               <div class="name">${escapeHtml(person.name)}</div>
-              <div class="role">${escapeHtml(person.role)}</div>
+              <div class="role">${escapeHtml(person.role || "بدون سمت")}</div>
               <div class="chips">
-                <span class="chip">${escapeHtml(person.phone)}</span>
-                <span class="chip">${escapeHtml(person.nationalId)}</span>
-                <span class="chip">${escapeHtml(person.birthDate)}</span>
+                ${person.phone ? `<span class="chip">${escapeHtml(person.phone)}</span>` : ""}
+                ${person.nationalId ? `<span class="chip">${escapeHtml(person.nationalId)}</span>` : ""}
+                ${person.birthDate ? `<span class="chip">${escapeHtml(person.birthDate)}</span>` : ""}
               </div>
             </div>
-          </label>
-        `;
-      }).join("");
-      renderFields();
-    }
-
-    function renderFields() {
-      const selected = selectedPeople();
-      els.tableSection.hidden = selected.length === 0;
-
-      if (!selected.length) {
-        els.fieldsPanel.innerHTML = `<div class="empty">یک یا چند نفر را از لیست سمت راست انتخاب کنید.</div>`;
-        els.selectedTableBody.innerHTML = "";
-        return;
-      }
-
-      els.fieldsPanel.innerHTML = FIELD_DEFS.map((field) => {
-        const items = selected
-          .map((person, i) => `<li><span class="idx">${i + 1}.</span><span>${escapeHtml(person[field.key])}</span></li>`)
-          .join("");
-        return `
-          <article class="field" data-field="${field.key}">
-            <div class="field-top">
-              <h3>${field.title}</h3>
-              <button type="button" class="ghost copy-field" data-field="${field.key}">کپی</button>
-            </div>
-            <ul>${items}</ul>
-          </article>
-        `;
-      }).join("");
-
-      els.selectedTableBody.innerHTML = selected.map((person, i) => `
-        <tr>
-          <td>${i + 1}</td>
-          <td>${escapeHtml(person.name)}</td>
-          <td>${escapeHtml(person.role)}</td>
-          <td>${escapeHtml(person.birthDate)}</td>
-          <td>${escapeHtml(person.nationalId)}</td>
-          <td>${escapeHtml(person.phone)}</td>
-        </tr>
+          </div>
+          <div class="assign-row">
+            <select class="assign-select" data-id="${escapeHtml(person.id)}" aria-label="انتخاب بخش برای ${escapeHtml(person.name)}">
+              ${sectionOptions(person.sectionId)}
+            </select>
+            <button type="button" class="ghost small match-role" data-id="${escapeHtml(person.id)}" ${state.sections.length ? "" : "disabled"}>بر اساس سمت</button>
+          </div>
+        </article>
       `).join("");
     }
 
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
+    function renderSections() {
+      if (!state.sections.length) {
+        els.sectionsList.innerHTML = `<div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>`;
+        return;
+      }
+
+      els.sectionsList.innerHTML = state.sections.map((section) => {
+        const members = peopleInSection(section.id);
+        const items = members.length
+          ? members.map((person) => `
+              <div class="bucket-item">
+                <div>
+                  <div class="name">${escapeHtml(person.name)}</div>
+                  <div class="sub">${escapeHtml(person.role || "—")}</div>
+                </div>
+                <button type="button" class="ghost small remove-from-section" data-id="${escapeHtml(person.id)}">حذف</button>
+              </div>
+            `).join("")
+          : `<div class="empty" style="padding:0.6rem 0.2rem">هنوز کسی در این بخش نیست.</div>`;
+
+        return `
+          <article class="bucket" data-section-id="${escapeHtml(section.id)}">
+            <div class="bucket-head">
+              <h3>${escapeHtml(section.title)} <span class="meta">(${members.length})</span></h3>
+              <div class="bucket-actions">
+                <button type="button" class="ghost small rename-section" data-section-id="${escapeHtml(section.id)}">تغییر نام</button>
+                <button type="button" class="danger small delete-section" data-section-id="${escapeHtml(section.id)}">حذف بخش</button>
+              </div>
+            </div>
+            <div class="bucket-body">${items}</div>
+          </article>
+        `;
+      }).join("");
     }
 
-    function fieldLines(fieldKey) {
-      return selectedPeople().map((p) => p[fieldKey]);
+    function addSection(title, { silent = false } = {}) {
+      const clean = title.trim();
+      if (!clean) {
+        if (!silent) toast("نام بخش را وارد کنید");
+        return null;
+      }
+      const existing = findSectionByTitle(clean);
+      if (existing) {
+        if (!silent) toast("این بخش از قبل وجود دارد");
+        return existing;
+      }
+      const section = { id: uid("sec"), title: clean };
+      state.sections.push(section);
+      return section;
     }
 
-    async function copyText(text, message) {
-      await navigator.clipboard.writeText(text);
-      toast(message);
+    function assignByRole(person) {
+      const role = (person.role || "").trim();
+      if (!role) return false;
+      let section = findSectionByTitle(role);
+      if (!section) {
+        // soft match: section title contained in role or vice versa
+        section = state.sections.find((s) => {
+          const t = s.title.trim();
+          return role === t || role.includes(t) || t.includes(role);
+        });
+      }
+      if (!section) return false;
+      person.sectionId = section.id;
+      return true;
+    }
+
+    function buildSummaryText() {
+      const blocks = [];
+      for (const section of state.sections) {
+        const members = peopleInSection(section.id);
+        if (!members.length) continue;
+        const lines = members.map((p, i) => {
+          return `${i + 1}. ${p.name}\n   سمت: ${p.role || "—"}\n   تاریخ تولد: ${p.birthDate || "—"}\n   کد ملی: ${p.nationalId || "—"}\n   تلفن: ${p.phone || "—"}`;
+        });
+        blocks.push(`${section.title}\n${lines.join("\n")}`);
+      }
+      return blocks.join("\n\n");
+    }
+
+    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120 } = {}) {
+      const rtl = `<w:bidi w:val="1"/>`;
+      const rPr = `
+        <w:rPr>
+          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:rtl="Tahoma"/>
+          ${bold ? "<w:b/><w:bCs/>" : ""}
+          <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
+          <w:rtl/>
+        </w:rPr>`;
+      const safe = xmlEscape(text);
+      return `
+        <w:p>
+          <w:pPr>
+            <w:spacing w:after="${spaceAfter}"/>
+            <w:jc w:val="${align}"/>
+            ${rtl}
+          </w:pPr>
+          <w:r>
+            ${rPr}
+            <w:t xml:space="preserve">${safe}</w:t>
+          </w:r>
+        </w:p>`;
+    }
+
+    async function exportWord() {
+      const bodyParts = [];
+      bodyParts.push(wordParagraph("لیست تفکیک‌شده مهمانان", { bold: true, size: 32, spaceAfter: 240 }));
+
+      let any = false;
+      for (const section of state.sections) {
+        const members = peopleInSection(section.id);
+        if (!members.length) continue;
+        any = true;
+        bodyParts.push(wordParagraph(section.title, { bold: true, size: 26, spaceAfter: 160 }));
+        members.forEach((person, index) => {
+          bodyParts.push(wordParagraph(`${index + 1}. ${person.name}`, { bold: true, size: 22, spaceAfter: 40 }));
+          bodyParts.push(wordParagraph(`سمت: ${person.role || "—"}`, { size: 20, spaceAfter: 20 }));
+          bodyParts.push(wordParagraph(`تاریخ تولد: ${person.birthDate || "—"}`, { size: 20, spaceAfter: 20 }));
+          bodyParts.push(wordParagraph(`کد ملی: ${person.nationalId || "—"}`, { size: 20, spaceAfter: 20 }));
+          bodyParts.push(wordParagraph(`تلفن: ${person.phone || "—"}`, { size: 20, spaceAfter: 140 }));
+        });
+      }
+
+      if (!any) {
+        toast("ابتدا افراد را در بخش‌ها قرار دهید");
+        return;
+      }
+
+      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    ${bodyParts.join("\n")}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>
+      <w:bidi/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+      const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+      const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+      const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
+
+      const zip = new JSZip();
+      zip.file("[Content_Types].xml", contentTypes);
+      zip.folder("_rels").file(".rels", rels);
+      const word = zip.folder("word");
+      word.file("document.xml", documentXml);
+      word.folder("_rels").file("document.xml.rels", docRels);
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `تفکیک-مهمانان-${stamp}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("فایل Word ذخیره شد");
     }
 
     async function handleFiles(fileList) {
@@ -713,8 +865,7 @@
 
       for (const file of files) {
         try {
-          const people = await readDocxFile(file);
-          extracted.push(...people);
+          extracted.push(...await readDocxFile(file));
         } catch (err) {
           console.error(err);
           errors.push(file.name);
@@ -725,28 +876,30 @@
         setStatus(
           errors.length
             ? `خطا در خواندن فایل‌ها: ${errors.join("، ")}`
-            : "در فایل‌ها هیچ اسم معتبری پیدا نشد.",
+            : "در فایل‌ها اسم معتبری پیدا نشد.",
           "error"
         );
         return;
       }
 
       const existingKeys = new Set(
-        state.people.map((p) => [p.name, p.nationalId, p.phone].join("|"))
+        state.people.map((p) => [p.name, p.nationalId, p.phone, p.role].join("||"))
       );
       let added = 0;
       for (const person of extracted) {
-        const key = [person.name, person.nationalId, person.phone].join("|");
+        const key = [person.name, person.nationalId, person.phone, person.role].join("||");
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
         state.people.push(person);
         added += 1;
       }
 
-      renderPeople();
-      const msg = `${added} نفر اضافه شد` + (errors.length ? ` | خطا: ${errors.join("، ")}` : "");
-      setStatus(msg, errors.length ? "error" : "ok");
-      toast(`${added} نفر از ورد استخراج شد`);
+      render();
+      setStatus(
+        `${added} نفر با نام دقیق اضافه شد` + (errors.length ? ` | خطا: ${errors.join("، ")}` : ""),
+        errors.length ? "error" : "ok"
+      );
+      toast(`${added} نفر استخراج شد`);
     }
 
     els.dropzone.addEventListener("dragover", (e) => {
@@ -764,78 +917,154 @@
       e.target.value = "";
     });
 
-    els.peopleList.addEventListener("change", (e) => {
-      const label = e.target.closest(".person");
-      if (!label) return;
-      const id = label.dataset.id;
-      if (e.target.checked) state.selected.add(id);
-      else state.selected.delete(id);
-      renderPeople();
+    els.addSectionBtn.addEventListener("click", () => {
+      const section = addSection(els.sectionNameInput.value);
+      if (!section) return;
+      els.sectionNameInput.value = "";
+      render();
+      toast(`بخش «${section.title}» اضافه شد`);
     });
 
-    els.selectAllBtn.addEventListener("click", () => {
-      state.people.forEach((p) => state.selected.add(p.id));
-      renderPeople();
+    els.sectionNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        els.addSectionBtn.click();
+      }
     });
 
-    els.clearSelectionBtn.addEventListener("click", () => {
-      state.selected.clear();
-      renderPeople();
+    els.sectionsFromRolesBtn.addEventListener("click", () => {
+      const roles = uniqueRoles();
+      if (!roles.length) {
+        toast("سمتی برای ساخت بخش پیدا نشد");
+        return;
+      }
+      let created = 0;
+      for (const role of roles) {
+        const before = state.sections.length;
+        addSection(role.title, { silent: true });
+        if (state.sections.length > before) created += 1;
+      }
+      render();
+      toast(`${created} بخش از روی سمت‌ها ساخته شد`);
     });
 
-    els.clearAllBtn.addEventListener("click", () => {
+    els.autoAssignBtn.addEventListener("click", () => {
+      let count = 0;
+      for (const person of state.people) {
+        if (person.sectionId) continue;
+        if (assignByRole(person)) count += 1;
+      }
+      render();
+      toast(count ? `${count} نفر در بخش مربوط به سمت‌شان قرار گرفتند` : "مورد جدیدی برای چینش خودکار نبود");
+    });
+
+    els.unassignAllBtn.addEventListener("click", () => {
+      state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
+      render();
+      toast("همه از بخش‌ها خارج شدند");
+    });
+
+    els.clearPeopleBtn.addEventListener("click", () => {
       state.people = [];
-      state.selected.clear();
-      renderPeople();
-      setStatus("لیست پاک شد.");
+      render();
+      setStatus("لیست افراد پاک شد.");
     });
 
-    els.fieldsPanel.addEventListener("click", async (e) => {
-      const btn = e.target.closest(".copy-field");
-      if (!btn) return;
-      const field = FIELD_DEFS.find((f) => f.key === btn.dataset.field);
-      const text = fieldLines(field.key).join("\n");
-      await copyText(text, `${field.title} کپی شد`);
+    els.clearSectionsBtn.addEventListener("click", () => {
+      state.sections = [];
+      state.people.forEach((p) => { p.sectionId = UNASSIGNED; });
+      render();
+      toast("همه بخش‌ها حذف شدند");
     });
 
-    els.copyAllBtn.addEventListener("click", async () => {
-      const selected = selectedPeople();
-      const blocks = FIELD_DEFS.map((field) => {
-        const lines = selected.map((p, i) => `${i + 1}. ${p[field.key]}`).join("\n");
-        return `${field.title}\n${lines}`;
+    els.exportWordBtn.addEventListener("click", () => {
+      exportWord().catch((err) => {
+        console.error(err);
+        toast("ساخت فایل Word ناموفق بود");
       });
-      await copyText(blocks.join("\n\n"), "همه بخش‌ها کپی شد");
     });
 
-    els.copyTableBtn.addEventListener("click", async () => {
-      const selected = selectedPeople();
-      const header = FIELD_DEFS.map((f) => f.title).join("\t");
-      const rows = selected.map((p) =>
-        [p.name, p.role, p.birthDate, p.nationalId, p.phone].join("\t")
-      );
-      await copyText([header, ...rows].join("\n"), "جدول کپی شد");
+    els.copySummaryBtn.addEventListener("click", async () => {
+      const text = buildSummaryText();
+      if (!text) {
+        toast("چیزی برای کپی نیست");
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      toast("خلاصه کپی شد");
     });
 
-    els.exportCsvBtn.addEventListener("click", () => {
-      const selected = selectedPeople();
-      const header = FIELD_DEFS.map((f) => f.title).join(",");
-      const rows = selected.map((p) =>
-        [p.name, p.role, p.birthDate, p.nationalId, p.phone]
-          .map((v) => `"${String(v).replaceAll('"', '""')}"`)
-          .join(",")
-      );
-      const bom = "\uFEFF";
-      const blob = new Blob([bom + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "guest-fields.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-      toast("فایل CSV ذخیره شد");
+    els.peopleList.addEventListener("change", (e) => {
+      const select = e.target.closest(".assign-select");
+      if (!select) return;
+      const person = state.people.find((p) => p.id === select.dataset.id);
+      if (!person) return;
+      person.sectionId = select.value || UNASSIGNED;
+      render();
     });
 
-    renderPeople();
+    els.peopleList.addEventListener("click", (e) => {
+      const btn = e.target.closest(".match-role");
+      if (!btn) return;
+      const person = state.people.find((p) => p.id === btn.dataset.id);
+      if (!person) return;
+      if (!assignByRole(person)) {
+        const role = (person.role || "").trim();
+        if (!role) {
+          toast("این فرد سمت ندارد");
+          return;
+        }
+        const section = addSection(role, { silent: true });
+        person.sectionId = section.id;
+        toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
+      } else {
+        toast("در بخش مربوط به سمت قرار گرفت");
+      }
+      render();
+    });
+
+    els.sectionsList.addEventListener("click", (e) => {
+      const removeBtn = e.target.closest(".remove-from-section");
+      if (removeBtn) {
+        const person = state.people.find((p) => p.id === removeBtn.dataset.id);
+        if (person) person.sectionId = UNASSIGNED;
+        render();
+        return;
+      }
+
+      const renameBtn = e.target.closest(".rename-section");
+      if (renameBtn) {
+        const section = state.sections.find((s) => s.id === renameBtn.dataset.sectionId);
+        if (!section) return;
+        const next = prompt("نام جدید بخش:", section.title);
+        if (next === null) return;
+        const clean = next.trim();
+        if (!clean) {
+          toast("نام بخش نمی‌تواند خالی باشد");
+          return;
+        }
+        const clash = findSectionByTitle(clean);
+        if (clash && clash.id !== section.id) {
+          toast("بخش دیگری با این نام وجود دارد");
+          return;
+        }
+        section.title = clean;
+        render();
+        return;
+      }
+
+      const deleteBtn = e.target.closest(".delete-section");
+      if (deleteBtn) {
+        const sectionId = deleteBtn.dataset.sectionId;
+        state.sections = state.sections.filter((s) => s.id !== sectionId);
+        state.people.forEach((p) => {
+          if (p.sectionId === sectionId) p.sectionId = UNASSIGNED;
+        });
+        render();
+      }
+    });
+
+    render();
   </script>
 </body>
 </html>
