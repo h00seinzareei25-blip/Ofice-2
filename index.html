@@ -509,7 +509,7 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    const APP_VERSION = 1;
+    const APP_VERSION = 2;
 
     const state = {
       people: [],
@@ -639,9 +639,22 @@
     }
 
     function findPersonForRecord(record) {
-      return state.people.find((p) => personKey(p) === record.key)
-        || state.people.find((p) => identityKey(p) === record.identity)
-        || null;
+      const byKey = state.people.find((p) => personKey(p) === record.key);
+      if (byKey) return byKey;
+
+      const byIdentity = state.people.find((p) => identityKey(p) === record.identity);
+      if (byIdentity) return byIdentity;
+
+      // Soft match to detect altered fields instead of false "missing"
+      if (record.nationalId) {
+        const byNationalId = state.people.filter((p) => p.nationalId === record.nationalId);
+        if (byNationalId.length === 1) return byNationalId[0];
+      }
+      if (record.phone) {
+        const byPhone = state.people.filter((p) => p.phone === record.phone);
+        if (byPhone.length === 1) return byPhone[0];
+      }
+      return null;
     }
 
     function allInputRecords() {
@@ -1388,11 +1401,16 @@
       }
 
       const liveRecords = livePeople.map(snapshotRecord);
-      // also refresh/merge snapshot batch so future checks keep this source of truth
+      const sourceNames = files.map((f) => f.name);
+      // Replace previous snapshots for the same source files so history stays accurate
+      state.batches = state.batches.filter((batch) => {
+        const batchFiles = batch.sourceFiles || [];
+        return !batchFiles.some((name) => sourceNames.includes(name));
+      });
       state.batches.push({
         id: uid("batch"),
         at: new Date().toISOString(),
-        sourceFiles: files.map((f) => f.name),
+        sourceFiles: sourceNames,
         personKeys: liveRecords.map((r) => r.key),
         records: liveRecords,
         addedCount: 0,
@@ -1422,8 +1440,9 @@
       handleFiles(e.dataTransfer.files);
     });
     els.fileInput.addEventListener("change", (e) => {
-      handleFiles(e.target.files);
+      const files = [...(e.target.files || [])];
       e.target.value = "";
+      handleFiles(files);
     });
 
     els.addSectionBtn.addEventListener("click", () => {
@@ -1545,9 +1564,9 @@
     });
 
     els.recheckInput.addEventListener("change", async (e) => {
-      const files = e.target.files;
+      const files = [...(e.target.files || [])];
       e.target.value = "";
-      if (!files?.length) return;
+      if (!files.length) return;
       await recheckAgainstWordFiles(files);
     });
 
@@ -1622,6 +1641,9 @@
     });
 
     if (loadBackupFromStorage()) {
+      if (state.batches.length) {
+        runCompletenessCheck({ source: "restore" });
+      }
       setStatus(`بک‌آپ قبلی بازیابی شد: ${state.people.length} نفر`, "ok");
     }
     render();
