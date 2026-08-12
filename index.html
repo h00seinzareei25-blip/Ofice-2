@@ -1104,7 +1104,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۵</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۶</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1307,8 +1307,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۵: متن سفید آپلود ورد + مقاوم‌سازی خواندن چندفایلی
-    const APP_VERSION = 15;
+    // نسخه ۱۶: حذف لیست «بدون بخش» از چکر پایین صفحه
+    const APP_VERSION = 16;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 8;
@@ -1842,7 +1842,7 @@
       return { nationalDuplicates, phoneDuplicates };
     }
 
-    function runAccuracyAudit({ includeUnassigned = true } = {}) {
+    function runAccuracyAudit({ includeUnassigned = false } = {}) {
       const fieldIssues = [];
       for (const person of state.people) {
         const issues = validatePersonFields(person);
@@ -1857,6 +1857,7 @@
         }
       }
 
+      // Unassigned people stay in «لیست باقیمانده»; do not build a second huge list for checker.
       const unassigned = includeUnassigned
         ? state.people.filter((p) => getSectionIds(p).length === 0).map((p) => ({
             id: p.id,
@@ -1866,8 +1867,9 @@
         : [];
 
       const { nationalDuplicates, phoneDuplicates } = findDuplicateGroups();
-      const ok = fieldIssues.length === 0 && unassigned.length === 0
-        && nationalDuplicates.length === 0 && phoneDuplicates.length === 0;
+      const ok = fieldIssues.length === 0
+        && nationalDuplicates.length === 0
+        && phoneDuplicates.length === 0;
 
       lastAccuracy = {
         at: nowIso(),
@@ -1890,19 +1892,14 @@
       }
       if (result.ok) {
         els.accuracyBar.className = "accuracy-bar ok";
-        els.accuracyBar.textContent = `دقت تأیید شد: ${result.total} نفر بدون مشکل کد ملی/تلفن/تاریخ و بدون فرد باقیمانده یا تکراری.`;
+        els.accuracyBar.textContent = `دقت تأیید شد: ${result.total} نفر بدون مشکل کد ملی/تلفن/تاریخ و بدون تکراری.`;
         return;
       }
       const bits = [];
       if (result.fieldIssues.length) bits.push(`${result.fieldIssues.length} نفر داده نامعتبر/ناقص`);
-      if (result.unassigned.length) bits.push(`${result.unassigned.length} نفر هنوز در بخشی نیستند`);
       if (result.nationalDuplicates.length) bits.push(`${result.nationalDuplicates.length} گروه کدملی تکراری`);
       if (result.phoneDuplicates.length) bits.push(`${result.phoneDuplicates.length} گروه تلفن تکراری`);
-      const onlyUnassigned = result.unassigned.length
-        && !result.fieldIssues.length
-        && !result.nationalDuplicates.length
-        && !result.phoneDuplicates.length;
-      els.accuracyBar.className = `accuracy-bar ${onlyUnassigned ? "warn" : "fail"}`;
+      els.accuracyBar.className = "accuracy-bar fail";
       els.accuracyBar.textContent = `هشدار دقت: ${bits.join("، ")}. جزئیات را در چکر ببینید.`;
     }
 
@@ -4110,15 +4107,14 @@
         };
       });
 
-      const accuracy = runAccuracyAudit({ includeUnassigned: true });
+      const accuracy = runAccuracyAudit({ includeUnassigned: false });
 
       const ok = missingFromProgram.length === 0
         && alteredInProgram.length === 0
         && (!exportedSet || missingFromExport.length === 0)
         && accuracy.fieldIssues.length === 0
         && accuracy.nationalDuplicates.length === 0
-        && accuracy.phoneDuplicates.length === 0
-        && (!exportedSet || accuracy.unassigned.length === 0);
+        && accuracy.phoneDuplicates.length === 0;
 
       const result = {
         at: new Date().toISOString(),
@@ -4131,7 +4127,7 @@
         alteredInProgram,
         missingFromExport,
         fieldIssues: accuracy.fieldIssues,
-        unassigned: accuracy.unassigned,
+        unassigned: [],
         nationalDuplicates: accuracy.nationalDuplicates,
         phoneDuplicates: accuracy.phoneDuplicates,
         byBatch,
@@ -4203,14 +4199,6 @@
           }</ul></div>`
         : "";
 
-      const unassignedList = (result.unassigned || []).length
-        ? `<div class="checker-block"><h3>هنوز در بخشی قرار نگرفته‌اند (${result.unassigned.length})</h3><ul>${
-            result.unassigned.map((p) =>
-              `<li><strong>${escapeHtml(p.name)}</strong>${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""}</li>`
-            ).join("")
-          }</ul></div>`
-        : "";
-
       const duplicateList = ((result.nationalDuplicates || []).length || (result.phoneDuplicates || []).length)
         ? `<div class="checker-block"><h3>تکراری‌ها</h3><ul>${
             [
@@ -4235,7 +4223,6 @@
         if (result.alteredInProgram.length) bits.push(`${result.alteredInProgram.length} نفر اطلاعات اشتباه دارند`);
         if (result.missingFromExport.length) bits.push(`${result.missingFromExport.length} نفر در خروجی نیستند`);
         if ((result.fieldIssues || []).length) bits.push(`${result.fieldIssues.length} نفر فیلد نامعتبر دارند`);
-        if ((result.unassigned || []).length) bits.push(`${result.unassigned.length} نفر بدون بخش‌اند`);
         if ((result.nationalDuplicates || []).length || (result.phoneDuplicates || []).length) bits.push("تکراری وجود دارد");
         summary = `اشکال در صحت/دقت: ${bits.join("، ")}.`;
       }
@@ -4246,17 +4233,16 @@
         ${alteredList}
         ${missingExportList}
         ${fieldIssueList}
-        ${unassignedList}
         ${duplicateList}
         ${batchList}
       `;
     }
 
     async function exportWord() {
-      const preAudit = runAccuracyAudit({ includeUnassigned: true });
+      const preAudit = runAccuracyAudit({ includeUnassigned: false });
       if (!preAudit.ok) {
         const proceed = confirm(
-          `هشدار دقت: ${preAudit.fieldIssues.length} مشکل فیلد، ${preAudit.unassigned.length} نفر بدون بخش، و تکراری‌های احتمالی وجود دارد.\nباز هم خروجی گرفته شود؟`
+          `هشدار دقت: ${preAudit.fieldIssues.length} مشکل فیلد و تکراری‌های احتمالی وجود دارد.\nباز هم خروجی گرفته شود؟`
         );
         if (!proceed) return;
       }
@@ -4411,14 +4397,21 @@
       for (const file of files) {
         try {
           livePeople.push(...await readDocxFile(file));
+          await new Promise((resolve) => setTimeout(resolve, 0));
         } catch (err) {
           console.error(err);
-          errors.push(file.name);
+          const reason = (err && err.message) ? String(err.message) : "خطای ناشناخته";
+          errors.push(`${file.name}: ${reason}`);
         }
       }
 
       if (!livePeople.length) {
-        setStatus("از فایل انتخاب‌شده فردی خوانده نشد.", "error");
+        setStatus(
+          errors.length
+            ? `از فایل انتخاب‌شده فردی خوانده نشد — ${errors.slice(0, 2).join(" | ")}`
+            : "از فایل انتخاب‌شده فردی خوانده نشد.",
+          "error"
+        );
         return;
       }
 
