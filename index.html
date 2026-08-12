@@ -419,10 +419,53 @@
       color: var(--accent);
     }
 
-    .order-actions {
+    .ops-compact {
+      display: grid;
+      gap: 0.45rem;
+      min-width: 16rem;
+    }
+
+    .ops-compact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 0.55rem;
+      align-items: start;
+    }
+
+    .ops-compact-grid .ops-field {
+      display: grid;
+      gap: 0.2rem;
+      min-width: 0;
+    }
+
+    .ops-compact-grid .ops-field .meta {
+      margin: 0;
+      white-space: normal;
+      font-size: 0.75rem;
+    }
+
+    .ops-compact-grid select {
+      width: 100%;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.45rem;
+    }
+
+    .ops-compact .order-actions,
+    .ops-compact .row-actions {
+      margin: 0;
       display: flex;
+      flex-wrap: wrap;
       gap: 0.3rem;
-      margin-bottom: 0.45rem;
+    }
+
+    .ops-compact .multi-section-flag,
+    .ops-compact > .meta {
+      margin-bottom: 0;
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 700px) {
+      .ops-compact-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 900px) {
@@ -810,7 +853,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۷</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۸</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -976,8 +1019,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۷: ویرایش/حذف در لیست باقیمانده + اصلاح جهت تاریخ در Word
-    const APP_VERSION = 7;
+    // نسخه ۸: جمع‌وجور کردن ستون عملیات بخش در دو ستون
+    const APP_VERSION = 8;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
 
@@ -2482,29 +2525,43 @@
                   <div class="meta" style="margin-top:0.2rem;white-space:normal">روز: ${escapeHtml(formatDateOnly(person.registeredAt))}</div>
                 </td>
                 <td>
-                  ${titles.length > 1 ? `
-                    <div class="multi-section-flag">
-                      <span class="mark">★</span>عضو ${titles.length} بخش · ${escapeHtml(titles.join("، "))}
+                  <div class="ops-compact">
+                    ${titles.length > 1 ? `
+                      <div class="multi-section-flag">
+                        <span class="mark">★</span>عضو ${titles.length} بخش · ${escapeHtml(titles.join("، "))}
+                      </div>
+                    ` : `
+                      <div class="meta">فقط در این بخش</div>
+                    `}
+                    <div class="ops-compact-grid">
+                      <div class="ops-field">
+                        <div class="meta">ترتیب</div>
+                        <div class="order-actions">
+                          <button type="button" class="ghost small move-up" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canUp ? "" : "disabled"} title="بالاتر">▲</button>
+                          <button type="button" class="ghost small move-down" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canDown ? "" : "disabled"} title="پایین‌تر">▼</button>
+                        </div>
+                      </div>
+                      <div class="ops-field">
+                        <div class="meta">عملیات</div>
+                        <div class="row-actions">
+                          <button type="button" class="ghost small edit-person" data-id="${escapeHtml(person.id)}">ویرایش</button>
+                          <button type="button" class="danger small delete-person" data-id="${escapeHtml(person.id)}">حذف</button>
+                        </div>
+                      </div>
+                      <div class="ops-field">
+                        <label class="meta" for="move-${escapeHtml(person.id)}">جابه‌جایی</label>
+                        <select id="move-${escapeHtml(person.id)}" class="move-section-select" data-id="${escapeHtml(person.id)}" data-from-section="${escapeHtml(currentSectionId)}" aria-label="جابه‌جایی ${escapeHtml(person.name)}">
+                          ${moveOptions}
+                        </select>
+                      </div>
+                      <div class="ops-field">
+                        <label class="meta" for="add-${escapeHtml(person.id)}">افزودن به بخش</label>
+                        <select id="add-${escapeHtml(person.id)}" class="add-section-select" data-id="${escapeHtml(person.id)}" aria-label="افزودن ${escapeHtml(person.name)} به بخش دیگر" ${otherSections.length ? "" : "disabled"}>
+                          ${addOptions}
+                        </select>
+                      </div>
                     </div>
-                  ` : `
-                    <div class="meta" style="margin-bottom:0.45rem;white-space:normal">فقط در این بخش</div>
-                  `}
-                  <div class="order-actions">
-                    <button type="button" class="ghost small move-up" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canUp ? "" : "disabled"} title="بالاتر">▲</button>
-                    <button type="button" class="ghost small move-down" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canDown ? "" : "disabled"} title="پایین‌تر">▼</button>
                   </div>
-                  <div class="row-actions">
-                    <button type="button" class="ghost small edit-person" data-id="${escapeHtml(person.id)}">ویرایش</button>
-                    <button type="button" class="danger small delete-person" data-id="${escapeHtml(person.id)}">حذف</button>
-                  </div>
-                  <label class="meta" style="display:block;margin:0.45rem 0 0.2rem;white-space:normal">جابه‌جایی از این بخش</label>
-                  <select class="move-section-select" data-id="${escapeHtml(person.id)}" data-from-section="${escapeHtml(currentSectionId)}" aria-label="جابه‌جایی ${escapeHtml(person.name)}">
-                    ${moveOptions}
-                  </select>
-                  <label class="meta" style="display:block;margin:0.45rem 0 0.2rem;white-space:normal">افزودن به بخش دیگر</label>
-                  <select class="add-section-select" data-id="${escapeHtml(person.id)}" aria-label="افزودن ${escapeHtml(person.name)} به بخش دیگر" ${otherSections.length ? "" : "disabled"}>
-                    ${addOptions}
-                  </select>
                 </td>
               </tr>`;
             }).join("")}
