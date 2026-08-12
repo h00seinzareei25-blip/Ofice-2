@@ -572,23 +572,26 @@
     }
 
     .multi-section-flag {
-      display: grid;
-      gap: 0.3rem;
-      margin-bottom: 0.55rem;
-      padding: 0.55rem 0.65rem;
-      border-radius: 10px;
-      border: 1px solid #e0c49a;
-      background: #fff7ec;
-      color: #8a4f16;
+      display: block;
+      margin-bottom: 0.45rem;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.82rem;
       line-height: 1.55;
+      white-space: normal;
     }
 
-    .multi-section-flag strong {
-      font-size: 0.88rem;
+    .multi-section-flag .mark {
+      font-size: 0.62rem;
+      margin-inline-end: 0.2rem;
+      opacity: 0.7;
+      vertical-align: middle;
     }
 
     .multi-section-flag .section-list {
-      font-size: 0.84rem;
+      font-size: inherit;
       white-space: normal;
     }
 
@@ -734,7 +737,8 @@
       <h1>تفکیک مهمانان در بخش‌ها</h1>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
-        چکر صحت ورود، اطلاعات داخل برنامه را با فایل ورودی مقایسه می‌کند تا کسی از قلم نیفتد و داده‌ها اشتباه نباشند.
+        می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
+        گزارش روزانه با تاریخ شمسی کار می‌کند. چکر صحت ورود، اطلاعات داخل برنامه را با فایل ورودی مقایسه می‌کند.
         در خروجی Word فیلد سمت نمی‌آید.
       </p>
     </header>
@@ -1781,10 +1785,9 @@
                   <td>
                     ${titles.length > 1 ? `
                       <div class="multi-section-flag" style="margin-bottom:0">
-                        <strong>★ عضو ${titles.length} بخش</strong>
-                        <div class="section-list">${escapeHtml(titles.join(" · "))}</div>
+                        <span class="mark">★</span>${escapeHtml(titles.join("، "))}
                       </div>
-                    ` : titles.length ? escapeHtml(titles.join(" · ")) : "باقیمانده"}
+                    ` : titles.length ? escapeHtml(titles.join("، ")) : "باقیمانده"}
                   </td>
                   <td>
                     <div class="row-actions">
@@ -2348,9 +2351,7 @@
                 <td>
                   ${titles.length > 1 ? `
                     <div class="multi-section-flag">
-                      <strong>★ عضو ${titles.length} بخش</strong>
-                      <div class="section-list">در بخش‌ها: ${escapeHtml(titles.join(" · "))}</div>
-                      <div class="section-list">همین لیست: ${escapeHtml(state.sections.find((s) => s.id === currentSectionId)?.title || "—")}</div>
+                      <span class="mark">★</span>عضو ${titles.length} بخش · ${escapeHtml(titles.join("، "))}
                     </div>
                   ` : `
                     <div class="meta" style="margin-bottom:0.45rem;white-space:normal">فقط در این بخش</div>
