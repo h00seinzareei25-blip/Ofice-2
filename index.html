@@ -482,31 +482,8 @@
 
     .search-quick {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto;
       gap: 0.45rem;
-    }
-
-    .search-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.55rem;
-    }
-
-    @media (max-width: 900px) {
-      .search-grid { grid-template-columns: 1fr 1fr; }
-      .search-quick { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 600px) {
-      .search-grid { grid-template-columns: 1fr; }
-    }
-
-    .search-grid label,
-    .search-filters .field-label {
-      display: grid;
-      gap: 0.25rem;
-      font-size: 0.8rem;
-      color: var(--muted);
     }
 
     .search-results {
@@ -716,42 +693,17 @@
 
     <section class="panel search-panel">
       <div class="section-head">
-        <h2>جست‌وجوی پیشرفته</h2>
+        <h2>جست‌وجو</h2>
         <span class="meta" id="searchMeta">۰ نتیجه</span>
       </div>
       <div class="search-filters">
         <div class="search-quick">
-          <input id="searchQuery" type="text" placeholder="جست‌وجوی سریع در همه فیلدها: نام، کد ملی، تلفن، سمت، فایل..." />
-          <button type="button" id="runSearchBtn">جست‌وجو</button>
-          <button type="button" class="ghost" id="clearSearchBtn">پاک کردن فیلترها</button>
-        </div>
-        <div class="search-grid">
-          <label>نام و نام خانوادگی<input id="searchName" type="text" placeholder="مثلاً شیما" /></label>
-          <label>کد ملی<input id="searchNationalId" type="text" placeholder="۱۰ رقم" /></label>
-          <label>تلفن<input id="searchPhone" type="text" placeholder="۰۹..." /></label>
-          <label>سمت<input id="searchRole" type="text" placeholder="مجری، شاعر..." /></label>
-          <label>تاریخ تولد<input id="searchBirthDate" type="text" placeholder="۱۳۷۰/۰۴/۰۵" /></label>
-          <label>فایل ورودی<input id="searchSourceFile" type="text" placeholder="نام فایل ورد" /></label>
-          <label>بخش
-            <select id="searchSection">
-              <option value="">همه بخش‌ها</option>
-            </select>
-          </label>
-          <label>وضعیت
-            <select id="searchStatus">
-              <option value="">همه</option>
-              <option value="assigned">فقط داخل بخش</option>
-              <option value="unassigned">فقط باقیمانده</option>
-              <option value="multi">عضوی چند بخش</option>
-            </select>
-          </label>
-          <label>روز ثبت (شمسی یا ISO)
-            <input id="searchRegisteredDay" type="text" placeholder="مثلاً ۱۴۰۵/۰۵/۲۰ یا 2026-08-11" />
-          </label>
+          <input id="searchQuery" type="text" placeholder="نام، کد ملی، تلفن، سمت، بخش، فایل یا روز ثبت را بنویسید..." />
+          <button type="button" class="ghost" id="clearSearchBtn">پاک کردن</button>
         </div>
       </div>
       <div class="search-results" id="searchResults">
-        <div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>
+        <div class="empty">برای شروع، داخل کادر بالا بنویسید.</div>
       </div>
     </section>
 
@@ -870,17 +822,7 @@
       closeSectionModalBtn: document.getElementById("closeSectionModalBtn"),
       searchMeta: document.getElementById("searchMeta"),
       searchQuery: document.getElementById("searchQuery"),
-      searchName: document.getElementById("searchName"),
-      searchNationalId: document.getElementById("searchNationalId"),
-      searchPhone: document.getElementById("searchPhone"),
-      searchRole: document.getElementById("searchRole"),
-      searchBirthDate: document.getElementById("searchBirthDate"),
-      searchSourceFile: document.getElementById("searchSourceFile"),
-      searchSection: document.getElementById("searchSection"),
-      searchStatus: document.getElementById("searchStatus"),
-      searchRegisteredDay: document.getElementById("searchRegisteredDay"),
       searchResults: document.getElementById("searchResults"),
-      runSearchBtn: document.getElementById("runSearchBtn"),
       clearSearchBtn: document.getElementById("clearSearchBtn"),
       runAccuracyBtn: document.getElementById("runAccuracyBtn"),
       accuracyBar: document.getElementById("accuracyBar"),
@@ -1504,86 +1446,53 @@
       );
     }
 
-    function getSearchFilters() {
-      return {
-        query: els.searchQuery.value,
-        name: els.searchName.value,
-        nationalId: els.searchNationalId.value,
-        phone: els.searchPhone.value,
-        role: els.searchRole.value,
-        birthDate: els.searchBirthDate.value,
-        sourceFile: els.searchSourceFile.value,
-        sectionId: els.searchSection.value,
-        status: els.searchStatus.value,
-        registeredDay: els.searchRegisteredDay.value,
-      };
+    function getSearchQuery() {
+      return els.searchQuery.value;
     }
 
-    function hasActiveSearch(filters = getSearchFilters()) {
-      return Object.values(filters).some((v) => normalizeLabel(v));
+    function hasActiveSearch(query = getSearchQuery()) {
+      return Boolean(normalizeLabel(query));
     }
 
-    function personMatchesSearch(person, filters = getSearchFilters()) {
-      const sectionIds = getSectionIds(person);
+    function personMatchesSearch(person, query = getSearchQuery()) {
+      if (!hasActiveSearch(query)) return false;
       const sectionTitles = sectionTitlesForPerson(person).join(" ");
-
-      if (filters.query) {
-        const blob = [
-          person.name,
-          person.role,
-          person.birthDate,
-          person.nationalId,
-          person.phone,
-          person.sourceFile,
-          sectionTitles,
-          formatDateTime(person.registeredAt),
-          formatDateOnly(person.registeredAt),
-        ].join(" ");
-        const digitQuery = compactDigits(filters.query);
-        const queryOk = includesText(blob, filters.query) || (digitQuery ? includesDigits(blob, digitQuery) : false);
-        if (!queryOk) return false;
-      }
-
-      if (!includesText(person.name, filters.name)) return false;
-      if (!includesDigits(person.nationalId, filters.nationalId)) return false;
-      if (!includesDigits(person.phone, filters.phone)) return false;
-      if (!includesText(person.role, filters.role)) return false;
-      if (!includesText(person.birthDate, filters.birthDate) && !includesDigits(person.birthDate, filters.birthDate)) return false;
-      if (!includesText(person.sourceFile, filters.sourceFile)) return false;
-      if (filters.sectionId && !sectionIds.includes(filters.sectionId)) return false;
-
-      if (filters.status === "assigned" && !sectionIds.length) return false;
-      if (filters.status === "unassigned" && sectionIds.length) return false;
-      if (filters.status === "multi" && sectionIds.length < 2) return false;
-
-      if (!registeredDayMatches(person.registeredAt, filters.registeredDay)) return false;
-      return true;
+      const statusLabel = getSectionIds(person).length
+        ? (getSectionIds(person).length > 1 ? "چند بخش داخل بخش" : "داخل بخش")
+        : "باقیمانده";
+      const blob = [
+        person.name,
+        person.role,
+        person.birthDate,
+        person.nationalId,
+        person.phone,
+        person.sourceFile,
+        sectionTitles,
+        statusLabel,
+        formatDateTime(person.registeredAt),
+        formatDateOnly(person.registeredAt),
+      ].join(" ");
+      const digitQuery = compactDigits(query);
+      return includesText(blob, query) || (digitQuery ? includesDigits(blob, digitQuery) : false);
     }
 
     function runAdvancedSearch() {
-      const filters = getSearchFilters();
-      lastSearchActive = hasActiveSearch(filters);
+      const query = getSearchQuery();
+      lastSearchActive = hasActiveSearch(query);
       if (!lastSearchActive) {
         els.searchMeta.textContent = "۰ نتیجه";
-        els.searchResults.innerHTML = `<div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>`;
+        els.searchResults.innerHTML = `<div class="empty">برای شروع، داخل کادر بالا بنویسید.</div>`;
         return [];
       }
-      const results = state.people.filter((p) => personMatchesSearch(p, filters));
+      const results = state.people.filter((p) => personMatchesSearch(p, query));
       renderSearchResults(results);
       return results;
-    }
-
-    function renderSearchSectionOptions() {
-      const current = els.searchSection.value;
-      els.searchSection.innerHTML = `<option value="">همه بخش‌ها</option>` + state.sections
-        .map((s) => `<option value="${escapeHtml(s.id)}" ${s.id === current ? "selected" : ""}>${escapeHtml(s.title)}</option>`)
-        .join("");
     }
 
     function renderSearchResults(results) {
       els.searchMeta.textContent = `${results.length} نتیجه`;
       if (!results.length) {
-        els.searchResults.innerHTML = `<div class="empty">موردی با این فیلترها پیدا نشد.</div>`;
+        els.searchResults.innerHTML = `<div class="empty">موردی پیدا نشد.</div>`;
         return;
       }
 
@@ -1636,18 +1545,9 @@
 
     function clearSearchFilters() {
       els.searchQuery.value = "";
-      els.searchName.value = "";
-      els.searchNationalId.value = "";
-      els.searchPhone.value = "";
-      els.searchRole.value = "";
-      els.searchBirthDate.value = "";
-      els.searchSourceFile.value = "";
-      els.searchSection.value = "";
-      els.searchStatus.value = "";
-      els.searchRegisteredDay.value = "";
       lastSearchActive = false;
       els.searchMeta.textContent = "۰ نتیجه";
-      els.searchResults.innerHTML = `<div class="empty">برای شروع، یک عبارت یا فیلتر وارد کنید.</div>`;
+      els.searchResults.innerHTML = `<div class="empty">برای شروع، داخل کادر بالا بنویسید.</div>`;
     }
 
     function findSectionByTitle(title) {
@@ -1875,7 +1775,6 @@
 
       renderPeople();
       renderSections();
-      renderSearchSectionOptions();
       if (lastSearchActive) runAdvancedSearch();
       else {
         els.searchMeta.textContent = "۰ نتیجه";
@@ -3071,46 +2970,19 @@
       }
     });
 
-    els.runSearchBtn.addEventListener("click", () => {
-      const results = runAdvancedSearch();
-      if (!hasActiveSearch()) {
-        toast("یک عبارت یا فیلتر وارد کنید");
-        return;
-      }
-      toast(`${results.length} نتیجه پیدا شد`);
-    });
-
     els.clearSearchBtn.addEventListener("click", () => {
       clearSearchFilters();
-      toast("فیلترها پاک شد");
+      toast("جست‌وجو پاک شد");
     });
 
-    [
-      els.searchQuery,
-      els.searchName,
-      els.searchNationalId,
-      els.searchPhone,
-      els.searchRole,
-      els.searchBirthDate,
-      els.searchSourceFile,
-      els.searchRegisteredDay,
-    ].forEach((input) => {
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          els.runSearchBtn.click();
-        }
-      });
-      input.addEventListener("input", () => {
-        if (hasActiveSearch()) runAdvancedSearch();
-      });
+    els.searchQuery.addEventListener("input", () => {
+      runAdvancedSearch();
     });
 
-    [els.searchSection, els.searchStatus].forEach((select) => {
-      select.addEventListener("change", () => {
-        if (hasActiveSearch()) runAdvancedSearch();
-        else if (select.value) runAdvancedSearch();
-      });
+    els.searchQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        clearSearchFilters();
+      }
     });
 
     els.searchResults.addEventListener("click", (e) => {
