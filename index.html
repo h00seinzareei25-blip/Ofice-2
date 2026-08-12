@@ -252,6 +252,67 @@
       word-break: break-word;
     }
 
+    .name-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.45rem;
+    }
+
+    .name-row .name {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .source-row-btn {
+      flex-shrink: 0;
+      margin-top: 0.05rem;
+    }
+
+    .source-row-modal {
+      width: min(440px, 100%);
+    }
+
+    .source-row-meta {
+      margin: 0 0 0.75rem;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.6;
+    }
+
+    .source-row-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .source-row-table th,
+    .source-row-table td {
+      border: 1px solid var(--line);
+      padding: 0.55rem 0.65rem;
+      vertical-align: top;
+      text-align: right;
+    }
+
+    .source-row-table th {
+      width: 34%;
+      background: #f4f8f6;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .source-row-table td {
+      font-weight: 600;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .source-row-table td.ltr-cell {
+      direction: ltr;
+      unicode-bidi: plaintext;
+      text-align: center;
+    }
+
     .role {
       color: var(--muted);
       font-size: 0.88rem;
@@ -1023,7 +1084,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۳ (ثابت)</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۴</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1209,14 +1270,26 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="sourceRowModal" hidden>
+    <div class="modal source-row-modal" role="dialog" aria-modal="true" aria-labelledby="sourceRowModalTitle">
+      <div class="modal-head">
+        <h2 id="sourceRowModalTitle">ردیف فایل ورد</h2>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="closeSourceRowModalBtn">بستن</button>
+        </div>
+      </div>
+      <div class="modal-body" id="sourceRowModalBody"></div>
+    </div>
+  </div>
+
   <script>
     const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۳ قفل/ثابت شد. هر تغییر بعدی باید APP_VERSION را به ۱۴ (و بعدتر) افزایش دهد.
-    const APP_VERSION = 13;
-    const APP_VERSION_FROZEN = true;
+    // نسخه ۱۴: پیش‌نمایش ردیف ورد در لیست باقیمانده
+    const APP_VERSION = 14;
+    const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const SECTION_PATH_SEP = " » ";
 
@@ -1266,6 +1339,10 @@
       sectionModal: document.getElementById("sectionModal"),
       sectionModalTitle: document.getElementById("sectionModalTitle"),
       sectionModalBody: document.getElementById("sectionModalBody"),
+      sourceRowModal: document.getElementById("sourceRowModal"),
+      sourceRowModalTitle: document.getElementById("sourceRowModalTitle"),
+      sourceRowModalBody: document.getElementById("sourceRowModalBody"),
+      closeSourceRowModalBtn: document.getElementById("closeSourceRowModalBtn"),
       printSectionBtn: document.getElementById("printSectionBtn"),
       exportSectionWordBtn: document.getElementById("exportSectionWordBtn"),
       exportSectionExcelBtn: document.getElementById("exportSectionExcelBtn"),
@@ -1388,6 +1465,69 @@
       };
     }
 
+    function captureSourceSnapshot(person) {
+      return {
+        row: person.row || "",
+        name: person.name || "",
+        role: person.role || "",
+        birthDate: person.birthDate || "",
+        nationalId: person.nationalId || "",
+        phone: person.phone || "",
+        sourceFile: person.sourceFile || "",
+      };
+    }
+
+    function ensureSourceSnapshot(person) {
+      if (!person || person.sourceSnapshot) return person;
+      person.sourceSnapshot = captureSourceSnapshot(person);
+      return person;
+    }
+
+    function findBatchRecordForPerson(person) {
+      if (!person) return null;
+      const records = allInputRecords();
+      const byKey = records.find((r) => r.key === personKey(person));
+      if (byKey) return byKey;
+      const byIdentity = records.find((r) => r.identity === identityKey(person));
+      if (byIdentity) return byIdentity;
+      if (person.nationalId) {
+        const matches = records.filter((r) => r.nationalId && r.nationalId === person.nationalId);
+        if (matches.length === 1) return matches[0];
+      }
+      if (person.phone) {
+        const matches = records.filter((r) => r.phone && r.phone === person.phone);
+        if (matches.length === 1) return matches[0];
+      }
+      return null;
+    }
+
+    function sourceRowPreviewData(person) {
+      if (!person) return null;
+      if (person.sourceSnapshot) {
+        return {
+          ...person.sourceSnapshot,
+          origin: person.sourceFile === "ثبت دستی" ? "manual" : "snapshot",
+        };
+      }
+      const record = findBatchRecordForPerson(person);
+      if (record) {
+        return {
+          row: record.row || person.row || "",
+          name: record.name || "",
+          role: record.role || "",
+          birthDate: record.birthDate || "",
+          nationalId: record.nationalId || "",
+          phone: record.phone || "",
+          sourceFile: record.sourceFile || person.sourceFile || "",
+          origin: "batch",
+        };
+      }
+      return {
+        ...captureSourceSnapshot(person),
+        origin: person.sourceFile === "ثبت دستی" ? "manual" : "current",
+      };
+    }
+
     function fieldDiffs(inputRecord, current) {
       const diffs = [];
       if ((current.name || "") !== (inputRecord.name || "")) diffs.push("نام");
@@ -1458,6 +1598,15 @@
         sectionIds: [],
         registeredAt: null,
         assignedAt: null,
+        sourceSnapshot: {
+          row,
+          name,
+          role,
+          birthDate,
+          nationalId,
+          phone,
+          sourceFile,
+        },
       };
     }
 
@@ -1826,6 +1975,15 @@
           registeredAt: null,
           assignedAt: null,
           sortedImport: true,
+          sourceSnapshot: {
+            row: String(fields.row || index),
+            name,
+            role: "",
+            birthDate: fields.birthDate === "—" ? "" : fields.birthDate,
+            nationalId: fields.nationalId === "—" ? "" : fields.nationalId,
+            phone: fields.phone === "—" ? "" : fields.phone,
+            sourceFile,
+          },
         });
       });
       return people;
@@ -2659,6 +2817,21 @@
           .map(snapshotRecord);
         return { ...batch, records, personKeys: records.map((r) => r.key) };
       });
+      for (const person of state.people) {
+        if (person.sourceSnapshot) continue;
+        const record = findBatchRecordForPerson(person);
+        person.sourceSnapshot = record
+          ? {
+              row: record.row || person.row || "",
+              name: record.name || "",
+              role: record.role || "",
+              birthDate: record.birthDate || "",
+              nationalId: record.nationalId || "",
+              phone: record.phone || "",
+              sourceFile: record.sourceFile || person.sourceFile || "",
+            }
+          : captureSourceSnapshot(person);
+      }
       state.lastCheck = payload.lastCheck || null;
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
     }
@@ -2765,6 +2938,7 @@
         registeredAt: nowIso(),
         assignedAt: null,
       };
+      person.sourceSnapshot = captureSourceSnapshot(person);
       const sectionId = els.manualSection.value || "";
       if (sectionId) addPersonToSection(person, sectionId);
       return person;
@@ -2854,7 +3028,10 @@
         <article class="person unassigned" data-id="${escapeHtml(person.id)}">
           <div class="person-top">
             <div class="view-mode">
-              <div class="name">${escapeHtml(person.name)}</div>
+              <div class="name-row">
+                <div class="name">${escapeHtml(person.name)}</div>
+                <button type="button" class="ghost small source-row-btn" data-id="${escapeHtml(person.id)}" title="پیش‌نمایش ردیف فایل ورد">منبع</button>
+              </div>
               <div class="role">${escapeHtml(person.role || "بدون سمت")}</div>
               <div class="chips">
                 ${person.phone ? `<span class="chip">${escapeHtml(person.phone)}</span>` : ""}
@@ -2890,6 +3067,51 @@
           </div>
         </article>
       `).join("");
+    }
+
+    function openSourceRowModal(personId) {
+      const person = state.people.find((p) => p.id === personId);
+      if (!person) return;
+      const data = sourceRowPreviewData(person);
+      if (!data) {
+        toast("ردیف منبع پیدا نشد");
+        return;
+      }
+      const note = data.origin === "manual"
+        ? "این فرد به‌صورت دستی ثبت شده و ردیف ورد ورودی ندارد؛ مشخصات ثبت‌شده نمایش داده می‌شود."
+        : data.origin === "current"
+          ? "نسخهٔ ذخیره‌شده از ردیف ورد پیدا نشد؛ مشخصات فعلی فرد نمایش داده می‌شود."
+          : "همان سطر خوانده‌شده از فایل ورد ورودی.";
+      const rows = [
+        ["فایل", data.sourceFile || "—", false],
+        ["ردیف", data.row || "—", true],
+        ["نام و نام خانوادگی", data.name || "—", false],
+        ["سمت", data.role || "—", false],
+        ["تاریخ تولد", data.birthDate || "—", true],
+        ["کد ملی", data.nationalId || "—", true],
+        ["تلفن", data.phone || "—", true],
+      ];
+      els.sourceRowModalTitle.textContent = "ردیف فایل ورد";
+      els.sourceRowModalBody.innerHTML = `
+        <p class="source-row-meta">${escapeHtml(note)}</p>
+        <table class="source-row-table">
+          <tbody>
+            ${rows.map(([label, value, ltr]) => `
+              <tr>
+                <th scope="row">${escapeHtml(label)}</th>
+                <td class="${ltr ? "ltr-cell" : ""}">${escapeHtml(value)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      els.sourceRowModal.hidden = false;
+    }
+
+    function closeSourceRowModal() {
+      if (!els.sourceRowModal) return;
+      els.sourceRowModal.hidden = true;
+      els.sourceRowModalBody.innerHTML = "";
     }
 
     function renderSections() {
@@ -3451,6 +3673,7 @@
 
           if (existing) {
             existing.sortedImport = true;
+            if (!existing.sourceSnapshot) ensureSourceSnapshot(existing);
             if (section) {
               const added = addPersonToSection(existing, section.id);
               if (added) linkedPeople += 1;
@@ -3461,6 +3684,7 @@
           incoming.registeredAt = registeredAt;
           incoming.assignedAt = null;
           incoming.sectionIds = [];
+          ensureSourceSnapshot(incoming);
           if (section) addPersonToSection(incoming, section.id);
           state.people.push(incoming);
           addedPeople += 1;
@@ -4371,6 +4595,12 @@
     });
 
     els.peopleList.addEventListener("click", (e) => {
+      const sourceBtn = e.target.closest(".source-row-btn");
+      if (sourceBtn) {
+        openSourceRowModal(sourceBtn.dataset.id);
+        return;
+      }
+
       const editBtn = e.target.closest(".edit-remaining");
       if (editBtn) {
         const card = editBtn.closest(".person");
@@ -4658,6 +4888,10 @@
     els.sectionModal.addEventListener("click", (e) => {
       if (e.target === els.sectionModal) closeSectionModal();
     });
+    els.closeSourceRowModalBtn.addEventListener("click", closeSourceRowModal);
+    els.sourceRowModal.addEventListener("click", (e) => {
+      if (e.target === els.sourceRowModal) closeSourceRowModal();
+    });
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === "z") {
         const tag = (e.target && e.target.tagName) || "";
@@ -4666,7 +4900,13 @@
         undoLast();
         return;
       }
-      if (e.key === "Escape" && !els.sectionModal.hidden) closeSectionModal();
+      if (e.key === "Escape") {
+        if (els.sourceRowModal && !els.sourceRowModal.hidden) {
+          closeSourceRowModal();
+          return;
+        }
+        if (!els.sectionModal.hidden) closeSectionModal();
+      }
     });
 
     if (loadBackupFromStorage()) {
