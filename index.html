@@ -1104,7 +1104,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۶</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۷</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1307,12 +1307,15 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۶: حذف لیست «بدون بخش» از چکر پایین صفحه
-    const APP_VERSION = 16;
+    // نسخه ۱۷: رفع بک‌آپ خودکار بعد از ورود ورد (ذخیره سبک + IndexedDB)
+    const APP_VERSION = 17;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
-    const MAX_BATCH_RECORDS_KEEP = 8;
+    const MAX_BATCH_RECORDS_KEEP = 3;
     const SECTION_PATH_SEP = " » ";
+    const IDB_NAME = "guest-sorter-db-v1";
+    const IDB_STORE = "backups";
+    const IDB_KEY = "latest";
 
     const state = {
       people: [],
@@ -1320,6 +1323,7 @@
       batches: [],
       lastSavedAt: null,
       lastCheck: null,
+      backupError: null,
     };
 
     const undoStack = [];
@@ -2789,12 +2793,15 @@
     }
 
     function compactBatches(batches = state.batches) {
-      if (!Array.isArray(batches) || batches.length <= MAX_BATCH_RECORDS_KEEP) {
-        return Array.isArray(batches) ? batches : [];
-      }
-      const keepFrom = batches.length - MAX_BATCH_RECORDS_KEEP;
+      if (!Array.isArray(batches) || !batches.length) return [];
+      const keepFrom = Math.max(0, batches.length - MAX_BATCH_RECORDS_KEEP);
       return batches.map((batch, index) => {
-        if (index >= keepFrom) return batch;
+        if (index >= keepFrom) {
+          return {
+            ...batch,
+            records: Array.isArray(batch.records) ? batch.records : [],
+          };
+        }
         return {
           id: batch.id,
           at: batch.at,
@@ -2808,68 +2815,197 @@
       });
     }
 
-    function buildBackupPayload() {
+    function slimPersonForBackup(person) {
+      return {
+        id: person.id,
+        row: person.row || "",
+        name: person.name || "",
+        role: person.role || "",
+        birthDate: person.birthDate || "",
+        nationalId: person.nationalId || "",
+        phone: person.phone || "",
+        sourceFile: person.sourceFile || "",
+        sectionIds: Array.isArray(person.sectionIds) ? person.sectionIds : [],
+        registeredAt: person.registeredAt || null,
+        assignedAt: person.assignedAt || null,
+        sortedImport: !!person.sortedImport,
+        // sourceSnapshot is rebuilt on restore to keep backup small
+      };
+    }
+
+    function slimBatchForBackup(batch, { keepRecords = true } = {}) {
+      return {
+        id: batch.id,
+        at: batch.at,
+        sourceFiles: batch.sourceFiles || [],
+        personKeys: batch.personKeys || [],
+        addedCount: batch.addedCount || 0,
+        recheckOnly: !!batch.recheckOnly,
+        records: keepRecords && Array.isArray(batch.records) ? batch.records : [],
+        compacted: !keepRecords || !!batch.compacted,
+      };
+    }
+
+    function buildBackupPayload({ mode = "full" } = {}) {
+      // modes: full | noCheck | noRecords | minimal
+      const keepRecords = mode === "full" || mode === "noCheck";
+      const includeCheck = mode === "full";
       return {
         app: "guest-sorter",
         version: APP_VERSION,
         savedAt: new Date().toISOString(),
-        people: state.people,
+        people: state.people.map(slimPersonForBackup),
         sections: state.sections,
-        batches: compactBatches(state.batches),
-        lastCheck: state.lastCheck,
+        batches: compactBatches(state.batches).map((b) => slimBatchForBackup(b, { keepRecords })),
+        lastCheck: includeCheck ? (state.lastCheck || null) : null,
+        backupMode: mode,
       };
     }
 
-    function persistBackup({ downloadSnapshot = false } = {}) {
-      state.batches = compactBatches(state.batches);
-      const trySave = (payload) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    function openBackupDb() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          reject(new Error("IndexedDB در دسترس نیست"));
+          return;
+        }
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onerror = () => reject(req.error || new Error("باز کردن IndexedDB ناموفق"));
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+      });
+    }
+
+    async function saveBackupToIdb(payload) {
+      const db = await openBackupDb();
+      try {
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite");
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error || new Error("نوشتن IndexedDB ناموفق"));
+          tx.objectStore(IDB_STORE).put(payload, IDB_KEY);
+        });
+      } finally {
+        db.close();
+      }
+    }
+
+    async function loadBackupFromIdb() {
+      const db = await openBackupDb();
+      try {
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readonly");
+          const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error || new Error("خواندن IndexedDB ناموفق"));
+        });
+      } finally {
+        db.close();
+      }
+    }
+
+    function saveBackupToLocalStorage(payload) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      try {
         const history = JSON.parse(localStorage.getItem(BACKUP_HISTORY_KEY) || "[]");
         history.unshift({
           savedAt: payload.savedAt,
           peopleCount: payload.people.length,
           sectionsCount: payload.sections.length,
           batchesCount: payload.batches.length,
+          mode: payload.backupMode || "full",
         });
-        localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
-      };
+        localStorage.setItem(BACKUP_HISTORY_KEY, JSON.stringify(history.slice(0, 12)));
+      } catch (_) {
+        try { localStorage.removeItem(BACKUP_HISTORY_KEY); } catch (__) { /* ignore */ }
+      }
+    }
 
-      let payload = buildBackupPayload();
-      state.lastSavedAt = payload.savedAt;
-      try {
-        trySave(payload);
-      } catch (err) {
-        console.error(err);
+    function persistBackup({ downloadSnapshot = false } = {}) {
+      state.batches = compactBatches(state.batches);
+      while (undoStack.length > (state.people.length > 500 ? 5 : UNDO_LIMIT)) undoStack.shift();
+      updateUndoBtn();
+
+      const preferredMode = state.people.length > 400 ? "noCheck" : "full";
+      let result = { ok: false, payload: null };
+
+      const tryModes = [preferredMode, "noCheck", "noRecords", "minimal"];
+      const seen = new Set();
+      for (const mode of tryModes) {
+        if (seen.has(mode)) continue;
+        seen.add(mode);
         try {
-          localStorage.removeItem(BACKUP_HISTORY_KEY);
-          undoStack.length = 0;
-          updateUndoBtn();
-          // Drop checker snapshot and batch records to free quota
-          state.batches = state.batches.map((batch) => ({
-            ...batch,
-            records: [],
-            compacted: true,
-          }));
-          state.lastCheck = null;
-          payload = buildBackupPayload();
+          const payload = buildBackupPayload({ mode });
+          saveBackupToLocalStorage(payload);
+          if (mode === "noRecords" || mode === "minimal") {
+            state.batches = state.batches.map((batch) => slimBatchForBackup(batch, { keepRecords: false }));
+            state.lastCheck = null;
+          } else if (mode === "noCheck") {
+            state.lastCheck = null;
+          }
           state.lastSavedAt = payload.savedAt;
-          trySave(payload);
-          toast("بک‌آپ سبک شد تا جا باز شود");
-        } catch (err2) {
-          console.error(err2);
-          toast("ذخیره بک‌آپ خودکار ناموفق بود (حافظه مرورگر پر است)");
+          state.backupError = null;
+          result = { ok: true, payload, mode, via: "localStorage" };
+          break;
+        } catch (err) {
+          console.warn("backup mode failed:", mode, err);
+          result = { ok: false, error: err, payload: result.payload };
         }
       }
 
-      if (downloadSnapshot) downloadBackupFile(payload);
+      const idbPayload = result.payload || buildBackupPayload({ mode: "noRecords" });
+      saveBackupToIdb(idbPayload)
+        .then(() => {
+          state.lastSavedAt = idbPayload.savedAt;
+          state.backupError = null;
+          updateBackupMeta();
+        })
+        .catch((err) => {
+          console.error(err);
+          if (!result.ok) {
+            state.lastSavedAt = null;
+            state.backupError = "حافظه مرورگر برای بک‌آپ کافی نیست";
+            updateBackupMeta();
+          }
+        });
+
+      if (!result.ok) {
+        state.lastSavedAt = null;
+        state.backupError = "حافظه مرورگر پر است";
+        toast("ذخیره بک‌آپ خودکار ناموفق بود؛ از «دانلود بک‌آپ» استفاده کنید");
+      }
+
+      if (downloadSnapshot) downloadBackupFile(idbPayload);
       updateBackupMeta();
+      return result.ok;
     }
 
-    function downloadBackupFile(payload = buildBackupPayload()) {
+    async function persistBackupReliable(options = {}) {
+      const syncOk = persistBackup(options);
+      try {
+        const payload = buildBackupPayload({
+          mode: state.people.length > 400 ? "noRecords" : "noCheck",
+        });
+        await saveBackupToIdb(payload);
+        state.lastSavedAt = payload.savedAt;
+        state.backupError = null;
+        updateBackupMeta();
+        return true;
+      } catch (err) {
+        console.error(err);
+        return syncOk;
+      }
+    }
+
+    function downloadBackupFile(payload = buildBackupPayload({ mode: "noCheck" })) {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const stamp = payload.savedAt.replace(/[:.]/g, "-");
+      const stamp = String(payload.savedAt || nowIso()).replace(/[:.]/g, "-");
       a.href = url;
       a.download = `backup-guest-sorter-${stamp}.json`;
       a.click();
@@ -2930,25 +3066,39 @@
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
     }
 
-    function loadBackupFromStorage() {
+    function updateBackupMeta() {
+      const batchInfo = state.batches.length
+        ? ` | ${state.batches.length} ورودی انباشته`
+        : "";
+      if (state.backupError && !state.lastSavedAt) {
+        els.backupMeta.textContent = `بک‌آپ خودکار ذخیره نشد: ${state.backupError}`;
+        return;
+      }
+      els.backupMeta.textContent = state.lastSavedAt
+        ? `بک‌آپ خودکار: ${formatDateTime(state.lastSavedAt)} | ${state.people.length} نفر${batchInfo}`
+        : "بک‌آپ خودکار: هنوز ذخیره نشده";
+    }
+
+    async function loadBackupFromStorage() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return false;
-        applyBackupPayload(JSON.parse(raw));
+        let payload = null;
+        try {
+          payload = await loadBackupFromIdb();
+        } catch (err) {
+          console.warn(err);
+        }
+        if (!payload) {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return false;
+          payload = JSON.parse(raw);
+        }
+        applyBackupPayload(payload);
+        state.backupError = null;
         return true;
       } catch (err) {
         console.error(err);
         return false;
       }
-    }
-
-    function updateBackupMeta() {
-      const batchInfo = state.batches.length
-        ? ` | ${state.batches.length} ورودی انباشته`
-        : "";
-      els.backupMeta.textContent = state.lastSavedAt
-        ? `بک‌آپ خودکار: ${formatDateTime(state.lastSavedAt)} | ${state.people.length} نفر${batchInfo}`
-        : "بک‌آپ خودکار: هنوز ذخیره نشده";
     }
 
     function snapshotState() {
@@ -3101,7 +3251,7 @@
         els.searchMeta.textContent = "۰ نتیجه";
       }
       renderDailyReport(getDailyPeople(), dailyLabel());
-      if (hasPeople) runAccuracyAudit({ includeUnassigned: true });
+      if (hasPeople) runAccuracyAudit({ includeUnassigned: false });
       else renderAccuracyBar(null);
       renderChecker(state.lastCheck);
       updateBackupMeta();
@@ -4361,27 +4511,47 @@
       });
       state.batches = compactBatches(state.batches);
 
+      // Save first (before heavy checker), so large imports still get a durable backup.
+      let saved = false;
       try {
-        const check = runCompletenessCheck({ source: "import" });
-        commit();
-        setStatus(
-          `${addedPeople.length} نفر اضافه شد (مجموع: ${state.people.length})` +
-            (check.ok ? " | چکر ورود: کامل" : " | چکر ورود: مغایرت دارد") +
-            (errors.length ? ` | ${errors.length} فایل با خطا` : ""),
-          errors.length || !check.ok ? "error" : "ok"
-        );
-        toast(check.ok
-          ? `${addedPeople.length} نفر اضافه شد — صحت ورود تأیید شد`
-          : `${addedPeople.length} نفر اضافه شد — چکر مغایرت ورود پیدا کرد`);
+        saved = await persistBackupReliable();
+        render();
       } catch (err) {
         console.error(err);
         try { render(); } catch (_) { /* ignore */ }
         setStatus(
-          `${addedPeople.length} نفر اضافه شد، ولی ذخیره/نمایش با مشکل روبه‌رو شد. بک‌آپ را دانلود کنید.`,
+          `${addedPeople.length} نفر اضافه شد، ولی ذخیره/نمایش با مشکل روبه‌رو شد. از «دانلود بک‌آپ» استفاده کنید.`,
           "error"
         );
         toast("افزودن انجام شد؛ ذخیره خودکار مشکل داشت");
+        return;
       }
+
+      let check = null;
+      try {
+        check = runCompletenessCheck({ source: "import" });
+        renderChecker(check);
+        updateBackupMeta();
+      } catch (err) {
+        console.error(err);
+      }
+
+      setStatus(
+        `${addedPeople.length} نفر اضافه شد (مجموع: ${state.people.length})` +
+          (check
+            ? (check.ok ? " | چکر ورود: کامل" : " | چکر ورود: مغایرت دارد")
+            : " | چکر بعداً بررسی شود") +
+          (saved ? " | بک‌آپ ذخیره شد" : " | بک‌آپ ذخیره نشد") +
+          (errors.length ? ` | ${errors.length} فایل با خطا` : ""),
+        (!saved || errors.length || (check && !check.ok)) ? "error" : "ok"
+      );
+      toast(
+        saved
+          ? (check && check.ok
+            ? `${addedPeople.length} نفر اضافه شد — بک‌آپ ذخیره شد`
+            : `${addedPeople.length} نفر اضافه شد — بک‌آپ ذخیره شد`)
+          : `${addedPeople.length} نفر اضافه شد ولی بک‌آپ خودکار ذخیره نشد`
+      );
     }
 
     async function recheckAgainstWordFiles(fileList) {
@@ -5048,12 +5218,17 @@
       }
     });
 
-    if (loadBackupFromStorage()) {
-      if (state.batches.length) {
-        runCompletenessCheck({ source: "restore" });
+    (async () => {
+      const restored = await loadBackupFromStorage();
+      if (restored) {
+        if (state.batches.length) {
+          try { runCompletenessCheck({ source: "restore" }); } catch (err) { console.warn(err); }
+        }
+        setStatus(`بک‌آپ قبلی بازیابی شد: ${state.people.length} نفر`, "ok");
       }
-      setStatus(`بک‌آپ قبلی بازیابی شد: ${state.people.length} نفر`, "ok");
-    }
+      updateUndoBtn();
+      render();
+    })();
     els.dailyDayInput.placeholder = `خالی = امروز (${dateToJalaliLabel(new Date())})`;
     updateUndoBtn();
     render();
