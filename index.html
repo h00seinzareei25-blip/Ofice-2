@@ -311,8 +311,72 @@
       align-items: center;
     }
 
+    .tree-item {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      min-width: 0;
+    }
+
+    .tree-item .bucket {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tree-gutter {
+      display: flex;
+      flex-shrink: 0;
+      align-self: stretch;
+    }
+
+    .tree-slot {
+      position: relative;
+      width: 1.05rem;
+      flex-shrink: 0;
+    }
+
+    .tree-slot.vline::before {
+      content: "";
+      position: absolute;
+      inset-inline-start: calc(50% - 1px);
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #94a3b8;
+    }
+
+    .tree-slot.tee::before,
+    .tree-slot.elbow::before {
+      content: "";
+      position: absolute;
+      inset-inline-start: calc(50% - 1px);
+      width: 2px;
+      background: #94a3b8;
+    }
+
+    .tree-slot.tee::before {
+      top: 0;
+      bottom: 0;
+    }
+
+    .tree-slot.elbow::before {
+      top: 0;
+      height: 50%;
+    }
+
+    .tree-slot.tee::after,
+    .tree-slot.elbow::after {
+      content: "";
+      position: absolute;
+      inset-inline-start: 50%;
+      top: calc(50% - 1px);
+      width: 50%;
+      height: 2px;
+      background: #94a3b8;
+    }
+
     .bucket.nested {
-      margin-top: 0.45rem;
+      margin-top: 0;
     }
 
     .bucket.depth-1 {
@@ -954,7 +1018,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۱</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۲</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1145,8 +1209,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۱: ورود ورد تفکیک‌شده + سبز کمرنگ زیرمجموعه‌ها
-    const APP_VERSION = 11;
+    // نسخه ۱۲: خطوط درختی زیرمجموعه‌ها + اصلاح جهت متن خروجی ورد
+    const APP_VERSION = 12;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const SECTION_PATH_SEP = " » ";
@@ -1952,7 +2016,7 @@
       }
       const bodyParts = [];
       bodyParts.push(wordParagraph("گزارش روزانه مهمانان", { bold: true, size: 32, align: "center", spaceAfter: 120 }));
-      bodyParts.push(wordParagraph(`روز: ${forceLtrText(lastDailyLabel)} | تعداد: ${forceLtrText(String(lastDailyPeople.length))} نفر`, {
+      bodyParts.push(wordParagraph(`روز: ${lastDailyLabel} | تعداد: ${lastDailyPeople.length} نفر`, {
         size: 20,
         align: "center",
         spaceAfter: 240,
@@ -2225,15 +2289,35 @@
       return Math.max(0, sectionAncestors(section).length - 1);
     }
 
-    function flattenSectionsTree(parentId = null, depth = 0, acc = []) {
+    function flattenSectionsTree(parentId = null, depth = 0, ancestorFlags = [], acc = []) {
       const children = getChildSections(parentId)
         .slice()
         .sort((a, b) => String(a.title).localeCompare(String(b.title), "fa"));
-      for (const child of children) {
-        acc.push({ section: child, depth });
-        flattenSectionsTree(child.id, depth + 1, acc);
-      }
+      children.forEach((child, index) => {
+        const isLast = index === children.length - 1;
+        acc.push({
+          section: child,
+          depth,
+          isLast,
+          ancestorFlags: ancestorFlags.slice(),
+        });
+        flattenSectionsTree(child.id, depth + 1, [...ancestorFlags, isLast], acc);
+      });
       return acc;
+    }
+
+    function treeGutterHtml(depth, isLast, ancestorFlags = []) {
+      if (!depth) return "";
+      const slots = [];
+      for (let i = 0; i < depth - 1; i += 1) {
+        slots.push(ancestorFlags[i]
+          ? `<span class="tree-slot pad" aria-hidden="true"></span>`
+          : `<span class="tree-slot vline" aria-hidden="true"></span>`);
+      }
+      slots.push(isLast
+        ? `<span class="tree-slot elbow" aria-hidden="true"></span>`
+        : `<span class="tree-slot tee" aria-hidden="true"></span>`);
+      return `<span class="tree-gutter" aria-hidden="true">${slots.join("")}</span>`;
     }
 
     function collectDescendantIds(sectionId) {
@@ -2789,30 +2873,32 @@
         return;
       }
 
-      els.sectionsList.innerHTML = flattenSectionsTree().map(({ section, depth }) => {
+      els.sectionsList.innerHTML = flattenSectionsTree().map(({ section, depth, isLast, ancestorFlags }) => {
         const count = peopleInSection(section.id).length;
         const childCount = getChildSections(section.id).length;
         const hasMembers = count > 0;
         const path = sectionPathLabel(section);
-        const indent = Math.min(depth, 6) * 0.85;
         return `
-          <article class="bucket ${hasMembers ? "has-members" : ""} ${depth ? `nested depth-${Math.min(depth, 6)}` : ""}" data-section-id="${escapeHtml(section.id)}" style="margin-inline-start:${indent}rem">
-            <div class="bucket-head">
-              <div class="bucket-title-wrap open-section" data-section-id="${escapeHtml(section.id)}" role="button" tabindex="0">
-                <div>
-                  <h3>${escapeHtml(section.title)}</h3>
-                  ${depth ? `<span class="bucket-path">${escapeHtml(path)}</span>` : ""}
-                  ${childCount ? `<span class="bucket-path">${childCount} زیرمجموعه</span>` : ""}
+          <div class="tree-item" data-depth="${depth}">
+            ${treeGutterHtml(depth, isLast, ancestorFlags)}
+            <article class="bucket ${hasMembers ? "has-members" : ""} ${depth ? `nested depth-${Math.min(depth, 6)}` : ""}" data-section-id="${escapeHtml(section.id)}">
+              <div class="bucket-head">
+                <div class="bucket-title-wrap open-section" data-section-id="${escapeHtml(section.id)}" role="button" tabindex="0">
+                  <div>
+                    <h3>${escapeHtml(section.title)}</h3>
+                    ${depth ? `<span class="bucket-path">${escapeHtml(path)}</span>` : ""}
+                    ${childCount ? `<span class="bucket-path">${childCount} زیرمجموعه</span>` : ""}
+                  </div>
+                  <span class="count-badge ${hasMembers ? "" : "empty"}">${count}</span>
                 </div>
-                <span class="count-badge ${hasMembers ? "" : "empty"}">${count}</span>
+                <div class="bucket-actions">
+                  <button type="button" class="ghost small add-child-section" data-section-id="${escapeHtml(section.id)}">زیرمجموعه</button>
+                  <button type="button" class="ghost small rename-section" data-section-id="${escapeHtml(section.id)}">تغییر نام</button>
+                  <button type="button" class="danger small delete-section" data-section-id="${escapeHtml(section.id)}">حذف</button>
+                </div>
               </div>
-              <div class="bucket-actions">
-                <button type="button" class="ghost small add-child-section" data-section-id="${escapeHtml(section.id)}">زیرمجموعه</button>
-                <button type="button" class="ghost small rename-section" data-section-id="${escapeHtml(section.id)}">تغییر نام</button>
-                <button type="button" class="danger small delete-section" data-section-id="${escapeHtml(section.id)}">حذف</button>
-              </div>
-            </div>
-          </article>
+            </article>
+          </div>
         `;
       }).join("");
     }
@@ -3422,26 +3508,20 @@
       return blocks.join("\n\n");
     }
 
-    function forceLtrText(value) {
-      const text = String(value ?? "").trim();
-      if (!text || text === "—") return text || "—";
-      // Keep slash-separated dates / digits from reversing in RTL Word
-      return `\u202A${text}\u202C`;
-    }
-
     function wordRunProps({ bold = false, size = 22, rtl = true } = {}) {
       return `
         <w:rPr>
-          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:rtl="Tahoma"/>
+          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma"/>
           ${bold ? "<w:b/><w:bCs/>" : ""}
           <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
-          ${rtl ? "<w:rtl/>" : '<w:rtl w:val="0"/>'}
+          <w:lang w:val="en-US" w:bidi="fa-IR"/>
+          ${rtl ? "<w:rtl/><w:cs/>" : ""}
         </w:rPr>`;
     }
 
     function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120, spaceBefore = 0, ltr = false } = {}) {
       const rPr = wordRunProps({ bold, size, rtl: !ltr });
-      const lines = String(text).split(/\n/);
+      const lines = String(text ?? "").split(/\n/);
       const runs = lines.map((line, index) => {
         const safe = xmlEscape(line);
         const br = index < lines.length - 1 ? `<w:br/>` : "";
@@ -3457,7 +3537,7 @@
           <w:pPr>
             <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="${ltr ? 0 : 1}"/>
+            <w:bidi w:val="${ltr ? "0" : "1"}"/>
           </w:pPr>
           ${runs}
         </w:p>`;
@@ -3471,7 +3551,7 @@
           <w:pPr>
             <w:spacing w:before="40" w:after="40"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="${ltr ? 0 : 1}"/>
+            <w:bidi w:val="${ltr ? "0" : "1"}"/>
           </w:pPr>
           <w:r>
             ${rPr}
@@ -3508,9 +3588,9 @@
         const values = [
           { text: String(index + 1), ltr: true, align: "center", bold: false },
           { text: person.name || "—", ltr: false, align: "right", bold: true },
-          { text: forceLtrText(person.birthDate || "—"), ltr: true, align: "center", bold: false },
-          { text: forceLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
-          { text: forceLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
+          { text: person.birthDate || "—", ltr: true, align: "center", bold: false },
+          { text: person.nationalId || "—", ltr: true, align: "center", bold: false },
+          { text: person.phone || "—", ltr: true, align: "center", bold: false },
         ];
         return `
           <w:tr>
