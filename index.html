@@ -281,6 +281,17 @@
       align-items: center;
     }
 
+    .person-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.55rem;
+    }
+
+    .person .edit-mode {
+      margin-top: 0.35rem;
+    }
+
     select, input[type="text"] {
       width: 100%;
       border: 1px solid var(--line);
@@ -799,7 +810,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۶</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۷</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -965,8 +976,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۶: کشویی شدن افزودن دستی و گزارش روزانه
-    const APP_VERSION = 6;
+    // نسخه ۷: ویرایش/حذف در لیست باقیمانده + اصلاح جهت تاریخ در Word
+    const APP_VERSION = 7;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
 
@@ -1673,7 +1684,7 @@
       }
       const bodyParts = [];
       bodyParts.push(wordParagraph("گزارش روزانه مهمانان", { bold: true, size: 32, align: "center", spaceAfter: 120 }));
-      bodyParts.push(wordParagraph(`روز: ${lastDailyLabel} | تعداد: ${lastDailyPeople.length} نفر`, {
+      bodyParts.push(wordParagraph(`روز: ${forceLtrText(lastDailyLabel)} | تعداد: ${forceLtrText(String(lastDailyPeople.length))} نفر`, {
         size: 20,
         align: "center",
         spaceAfter: 240,
@@ -2345,7 +2356,7 @@
       els.peopleList.innerHTML = unassigned.map((person) => `
         <article class="person unassigned" data-id="${escapeHtml(person.id)}">
           <div class="person-top">
-            <div>
+            <div class="view-mode">
               <div class="name">${escapeHtml(person.name)}</div>
               <div class="role">${escapeHtml(person.role || "بدون سمت")}</div>
               <div class="chips">
@@ -2354,6 +2365,23 @@
                 ${person.birthDate ? `<span class="chip">${escapeHtml(person.birthDate)}</span>` : ""}
                 ${person.sourceFile ? `<span class="chip">${escapeHtml(person.sourceFile)}</span>` : ""}
                 ${personAccuracyChips(person)}
+              </div>
+              <div class="person-actions">
+                <button type="button" class="ghost small edit-remaining" data-id="${escapeHtml(person.id)}">ویرایش</button>
+                <button type="button" class="danger small delete-remaining" data-id="${escapeHtml(person.id)}">حذف</button>
+              </div>
+            </div>
+            <div class="edit-mode" hidden>
+              <div class="edit-grid">
+                <label>نام<input type="text" class="edit-name" value="${escapeHtml(person.name)}" /></label>
+                <label>سمت<input type="text" class="edit-role" value="${escapeHtml(person.role || "")}" /></label>
+                <label>تاریخ تولد<input type="text" class="edit-birth" value="${escapeHtml(person.birthDate || "")}" /></label>
+                <label>کد ملی<input type="text" class="edit-national" value="${escapeHtml(person.nationalId || "")}" /></label>
+                <label>تلفن<input type="text" class="edit-phone" value="${escapeHtml(person.phone || "")}" /></label>
+              </div>
+              <div class="person-actions">
+                <button type="button" class="small save-remaining" data-id="${escapeHtml(person.id)}">ذخیره</button>
+                <button type="button" class="ghost small cancel-remaining" data-id="${escapeHtml(person.id)}">انصراف</button>
               </div>
             </div>
           </div>
@@ -2691,18 +2719,25 @@
       return blocks.join("\n\n");
     }
 
-    function wordRunProps({ bold = false, size = 22 } = {}) {
+    function forceLtrText(value) {
+      const text = String(value ?? "").trim();
+      if (!text || text === "—") return text || "—";
+      // Keep slash-separated dates / digits from reversing in RTL Word
+      return `\u202A${text}\u202C`;
+    }
+
+    function wordRunProps({ bold = false, size = 22, rtl = true } = {}) {
       return `
         <w:rPr>
           <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:rtl="Tahoma"/>
           ${bold ? "<w:b/><w:bCs/>" : ""}
           <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
-          <w:rtl/>
+          ${rtl ? "<w:rtl/>" : '<w:rtl w:val="0"/>'}
         </w:rPr>`;
     }
 
-    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120, spaceBefore = 0 } = {}) {
-      const rPr = wordRunProps({ bold, size });
+    function wordParagraph(text, { bold = false, size = 22, align = "right", spaceAfter = 120, spaceBefore = 0, ltr = false } = {}) {
+      const rPr = wordRunProps({ bold, size, rtl: !ltr });
       const lines = String(text).split(/\n/);
       const runs = lines.map((line, index) => {
         const safe = xmlEscape(line);
@@ -2719,21 +2754,21 @@
           <w:pPr>
             <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="1"/>
+            <w:bidi w:val="${ltr ? 0 : 1}"/>
           </w:pPr>
           ${runs}
         </w:p>`;
     }
 
-    function wordCellParagraph(text, { bold = false, size = 18, align = "center", header = false } = {}) {
-      const rPr = wordRunProps({ bold: bold || header, size });
+    function wordCellParagraph(text, { bold = false, size = 18, align = "center", header = false, ltr = false } = {}) {
+      const rPr = wordRunProps({ bold: bold || header, size, rtl: !ltr });
       const safe = xmlEscape(text || "—");
       return `
         <w:p>
           <w:pPr>
             <w:spacing w:before="40" w:after="40"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="1"/>
+            <w:bidi w:val="${ltr ? 0 : 1}"/>
           </w:pPr>
           <w:r>
             ${rPr}
@@ -2742,7 +2777,7 @@
         </w:p>`;
     }
 
-    function wordTableCell(text, { width, bold = false, header = false, align = "center" } = {}) {
+    function wordTableCell(text, { width, bold = false, header = false, align = "center", ltr = false } = {}) {
       const fill = header
         ? `<w:shd w:val="clear" w:color="auto" w:fill="E8F2ED"/>`
         : "";
@@ -2753,7 +2788,7 @@
             ${fill}
             <w:vAlign w:val="center"/>
           </w:tcPr>
-          ${wordCellParagraph(text, { bold, header, align: header ? "center" : align })}
+          ${wordCellParagraph(text, { bold, header, align: header ? "center" : align, ltr })}
         </w:tc>`;
     }
 
@@ -2768,19 +2803,19 @@
 
       const bodyRows = members.map((person, index) => {
         const values = [
-          String(index + 1),
-          person.name || "—",
-          person.birthDate || "—",
-          person.nationalId || "—",
-          person.phone || "—",
+          { text: String(index + 1), ltr: true, align: "center", bold: false },
+          { text: person.name || "—", ltr: false, align: "right", bold: true },
+          { text: forceLtrText(person.birthDate || "—"), ltr: true, align: "center", bold: false },
+          { text: forceLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
+          { text: forceLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
         ];
-        const aligns = ["center", "right", "center", "center", "center"];
         return `
           <w:tr>
-            ${values.map((value, i) => wordTableCell(value, {
+            ${values.map((cell, i) => wordTableCell(cell.text, {
               width: widths[i],
-              bold: i === 1,
-              align: aligns[i],
+              bold: cell.bold,
+              align: cell.align,
+              ltr: cell.ltr,
             })).join("")}
           </w:tr>`;
       }).join("");
@@ -3510,6 +3545,54 @@
     });
 
     els.peopleList.addEventListener("click", (e) => {
+      const editBtn = e.target.closest(".edit-remaining");
+      if (editBtn) {
+        const card = editBtn.closest(".person");
+        if (!card) return;
+        card.querySelector(".view-mode").hidden = true;
+        card.querySelector(".edit-mode").hidden = false;
+        return;
+      }
+
+      const cancelBtn = e.target.closest(".cancel-remaining");
+      if (cancelBtn) {
+        renderPeople();
+        return;
+      }
+
+      const saveBtn = e.target.closest(".save-remaining");
+      if (saveBtn) {
+        const person = state.people.find((p) => p.id === saveBtn.dataset.id);
+        const card = saveBtn.closest(".person");
+        if (!person || !card) return;
+        const nextName = card.querySelector(".edit-name").value.trim();
+        if (!nextName) {
+          toast("نام نمی‌تواند خالی باشد");
+          return;
+        }
+        withChange("ویرایش نفر باقیمانده", () => {
+          person.name = nextName;
+          person.role = card.querySelector(".edit-role").value.trim();
+          person.birthDate = card.querySelector(".edit-birth").value.trim();
+          person.nationalId = card.querySelector(".edit-national").value.trim();
+          person.phone = card.querySelector(".edit-phone").value.trim();
+        });
+        toast("مشخصات ویرایش شد");
+        return;
+      }
+
+      const deleteBtn = e.target.closest(".delete-remaining");
+      if (deleteBtn) {
+        const person = state.people.find((p) => p.id === deleteBtn.dataset.id);
+        if (!person) return;
+        if (!confirm(`«${person.name}» از کل برنامه حذف شود؟`)) return;
+        withChange("حذف نفر باقیمانده", () => {
+          deletePerson(person.id);
+        });
+        toast("فرد حذف شد");
+        return;
+      }
+
       const btn = e.target.closest(".match-role");
       if (!btn) return;
       if (btn.disabled) return;
