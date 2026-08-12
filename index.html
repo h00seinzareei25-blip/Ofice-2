@@ -1023,7 +1023,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۲ (ثابت)</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۳</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1214,9 +1214,9 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۲ قفل/ثابت شد. هر تغییر بعدی باید APP_VERSION را به ۱۳ (و بعدتر) افزایش دهد.
-    const APP_VERSION = 12;
-    const APP_VERSION_FROZEN = true;
+    // نسخه ۱۳: اصلاح جهت متن خروجی Word + وسط‌چین نام
+    const APP_VERSION = 13;
+    const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const SECTION_PATH_SEP = " » ";
 
@@ -1741,32 +1741,86 @@
       return joined.includes("نام و نام خانوادگی") && joined.includes("کد ملی");
     }
 
+    function detectSortedColumnMap(texts) {
+      const norms = texts.map((t) => normalizeLabel(stripDirectionalMarks(t)));
+      const find = (...keys) => norms.findIndex((t) => keys.some((k) => t.includes(k)));
+      const map = {
+        row: find("ردیف"),
+        name: find("نام"),
+        birth: find("تاریخ"),
+        nationalId: find("کد ملی", "کدملی"),
+        phone: find("تلفن", "موبایل"),
+      };
+      if (map.name < 0 || map.row < 0 || map.nationalId < 0 || map.phone < 0 || map.birth < 0) {
+        return null;
+      }
+      return map;
+    }
+
+    function scoreSortedColumnMap(texts, map) {
+      const get = (key) => texts[map[key]] || "";
+      let score = 0;
+      const row = toEnglishDigits(get("row")).replace(/[^\d]/g, "");
+      if (row) score += 1;
+      if (/[\u0600-\u06FF]/.test(get("name")) && !/^\d+$/.test(toEnglishDigits(get("name")).replace(/\D/g, ""))) score += 3;
+      if (/\d{2,4}\/\d{1,2}\/\d{1,2}/.test(toEnglishDigits(get("birth")))) score += 2;
+      const nid = compactDigits(get("nationalId"));
+      if (nid.length >= 8 && nid.length <= 12) score += 2;
+      const phone = compactDigits(get("phone"));
+      if (phone.length >= 10) score += 2;
+      return score;
+    }
+
+    function resolveSortedRowFields(texts, headerMap) {
+      if (headerMap) {
+        return {
+          row: texts[headerMap.row] || "",
+          name: texts[headerMap.name] || "",
+          birthDate: texts[headerMap.birth] || "",
+          nationalId: texts[headerMap.nationalId] || "",
+          phone: texts[headerMap.phone] || "",
+        };
+      }
+      const forward = { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4 };
+      const reverse = { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4 };
+      const useReverse = scoreSortedColumnMap(texts, reverse) > scoreSortedColumnMap(texts, forward);
+      const map = useReverse ? reverse : forward;
+      return {
+        row: texts[map.row] || "",
+        name: texts[map.name] || "",
+        birthDate: texts[map.birth] || "",
+        nationalId: texts[map.nationalId] || "",
+        phone: texts[map.phone] || "",
+      };
+    }
+
     function parseSortedTablePeople(table, sourceFile) {
       const rows = [...table.getElementsByTagNameNS(W_NS, "tr")];
       const people = [];
+      let headerMap = null;
       rows.forEach((tr, index) => {
         const cells = [...tr.children].filter((el) => el.localName === "tc");
         if (cells.length < 5) return;
         const texts = cells.map((tc) => stripDirectionalMarks(exactCellText(tc)));
-        if (isSortedPeopleHeader(texts)) return;
+        if (isSortedPeopleHeader(texts)) {
+          headerMap = detectSortedColumnMap(texts) || headerMap;
+          return;
+        }
         if (texts.every((t) => !t || t === "—" || t === "-")) return;
 
-        const row = texts[0] || String(index);
-        const name = texts[1] || "";
-        const birthDate = texts[2] || "";
-        const nationalId = texts[3] || "";
-        const phone = texts[4] || "";
+        const fields = resolveSortedRowFields(texts, headerMap);
+        const name = fields.name || "";
         if (!normalizeLabel(name)) return;
         if (isHeaderLabel(name)) return;
 
         people.push({
-          id: `${sourceFile}::sorted::${row}::${name}::${nationalId}::${phone}::${index}`,
-          row: String(row),
+          id: `${sourceFile}::sorted::${fields.row || index}::${name}::${fields.nationalId}::${fields.phone}::${index}`,
+          row: String(fields.row || index),
           name,
           role: "",
-          birthDate: birthDate === "—" ? "" : birthDate,
-          nationalId: nationalId === "—" ? "" : nationalId,
-          phone: phone === "—" ? "" : phone,
+          birthDate: fields.birthDate === "—" ? "" : fields.birthDate,
+          nationalId: fields.nationalId === "—" ? "" : fields.nationalId,
+          phone: fields.phone === "—" ? "" : fields.phone,
           sourceFile,
           sectionIds: [],
           registeredAt: null,
@@ -2053,41 +2107,7 @@
         bodyParts.push(wordPeopleTable(none));
       }
 
-      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${bodyParts.join("\n")}
-    <w:sectPr>
-      <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="1008" w:right="1008" w:bottom="1008" w:left="1008"/>
-      <w:bidi/>
-    </w:sectPr>
-  </w:body>
-</w:document>`;
-
-      const zip = new JSZip();
-      zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`);
-      zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`);
-      const word = zip.folder("word");
-      word.file("document.xml", documentXml);
-      word.folder("_rels").file("document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
-
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `گزارش-روزانه-${lastDailyLabel.replaceAll("/", "-")}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadDocx(bodyParts, `گزارش-روزانه-${lastDailyLabel.replaceAll("/", "-")}.docx`);
       toast("خروجی Word گزارش روزانه ذخیره شد");
     }
 
@@ -3119,7 +3139,8 @@
 
     async function downloadDocx(bodyParts, filename) {
       const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <w:body>
     ${bodyParts.join("\n")}
     <w:sectPr>
@@ -3130,12 +3151,36 @@
   </w:body>
 </w:document>`;
 
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma"/>
+        <w:lang w:val="fa-IR" w:eastAsia="en-US" w:bidi="fa-IR"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:bidi/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+</w:styles>`;
+
+      const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:themeFontLang w:val="fa-IR" w:eastAsia="en-US" w:bidi="fa-IR"/>
+</w:settings>`;
+
       const zip = new JSZip();
       zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
 </Types>`);
       zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -3143,8 +3188,13 @@
 </Relationships>`);
       const word = zip.folder("word");
       word.file("document.xml", documentXml);
+      word.file("styles.xml", stylesXml);
+      word.file("settings.xml", settingsXml);
       word.folder("_rels").file("document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+</Relationships>`);
 
       const blob = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(blob);
@@ -3514,13 +3564,14 @@
     }
 
     function wordRunProps({ bold = false, size = 22, rtl = true } = {}) {
+      // Avoid run-level <w:rtl/>: with paragraph bidi it can reverse Persian glyphs
+      // in Word/WPS. Arabic script + paragraph bidi is enough for correct display.
       return `
         <w:rPr>
-          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma"/>
+          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma" w:hint="${rtl ? "cs" : "default"}"/>
           ${bold ? "<w:b/><w:bCs/>" : ""}
           <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
-          <w:lang w:val="en-US" w:bidi="fa-IR"/>
-          ${rtl ? "<w:rtl/><w:cs/>" : ""}
+          <w:lang w:val="${rtl ? "fa-IR" : "en-US"}" w:eastAsia="en-US" w:bidi="fa-IR"/>
         </w:rPr>`;
     }
 
@@ -3542,7 +3593,7 @@
           <w:pPr>
             <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="${ltr ? "0" : "1"}"/>
+            ${ltr ? "" : "<w:bidi/>"}
           </w:pPr>
           ${runs}
         </w:p>`;
@@ -3556,7 +3607,7 @@
           <w:pPr>
             <w:spacing w:before="40" w:after="40"/>
             <w:jc w:val="${align}"/>
-            <w:bidi w:val="${ltr ? "0" : "1"}"/>
+            ${ltr ? "" : "<w:bidi/>"}
           </w:pPr>
           <w:r>
             ${rPr}
@@ -3592,7 +3643,7 @@
       const bodyRows = members.map((person, index) => {
         const values = [
           { text: String(index + 1), ltr: true, align: "center", bold: false },
-          { text: person.name || "—", ltr: false, align: "right", bold: true },
+          { text: person.name || "—", ltr: false, align: "center", bold: true },
           { text: person.birthDate || "—", ltr: true, align: "center", bold: false },
           { text: person.nationalId || "—", ltr: true, align: "center", bold: false },
           { text: person.phone || "—", ltr: true, align: "center", bold: false },
@@ -3614,7 +3665,7 @@
             <w:tblStyle w:val="TableGrid"/>
             <w:tblW w:w="${widths.reduce((a, b) => a + b, 0)}" w:type="dxa"/>
             <w:jc w:val="center"/>
-            <w:bidiVisual w:val="1"/>
+            <w:bidiVisual/>
             <w:tblBorders>
               <w:top w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
               <w:left w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
@@ -3895,50 +3946,8 @@
         return;
       }
 
-      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document
-  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:body>
-    ${bodyParts.join("\n")}
-    <w:sectPr>
-      <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="1008" w:right="1008" w:bottom="1008" w:left="1008"/>
-      <w:bidi/>
-    </w:sectPr>
-  </w:body>
-</w:document>`;
-
-      const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`;
-
-      const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`;
-
-      const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
-
-      const zip = new JSZip();
-      zip.file("[Content_Types].xml", contentTypes);
-      zip.folder("_rels").file(".rels", rels);
-      const word = zip.folder("word");
-      word.file("document.xml", documentXml);
-      word.folder("_rels").file("document.xml.rels", docRels);
-
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
       const stamp = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `تفکیک-مهمانان-${stamp}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadDocx(bodyParts, `تفکیک-مهمانان-${stamp}.docx`);
 
       const check = runCompletenessCheck({
         exportedIds: exported.map((p) => p.id),
