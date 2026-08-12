@@ -303,11 +303,33 @@
 
     .create-bar {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1.2fr 1fr auto auto;
       gap: 0.45rem;
       padding: 0.8rem 1rem;
       border-bottom: 1px solid var(--line);
       background: #f4f8f6;
+      align-items: center;
+    }
+
+    .bucket.nested {
+      margin-top: 0.45rem;
+    }
+
+    .bucket-path {
+      display: block;
+      margin-top: 0.15rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 400;
+      white-space: normal;
+      line-height: 1.4;
+    }
+
+    .child-sections {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
     }
 
     .manual-panel {
@@ -469,11 +491,11 @@
     }
 
     @media (max-width: 900px) {
+      .create-bar { grid-template-columns: 1fr; }
       .manual-grid { grid-template-columns: 1fr 1fr; }
     }
 
     @media (max-width: 700px) {
-      .create-bar { grid-template-columns: 1fr; }
       .manual-grid { grid-template-columns: 1fr; }
     }
 
@@ -853,7 +875,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۸</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۹</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -969,9 +991,12 @@
           <span class="meta" id="sectionsMeta">۰ بخش</span>
         </div>
         <div class="create-bar">
-          <input id="sectionNameInput" type="text" placeholder="نام بخش جدید، مثلاً مجری یا شاعر" />
-          <button type="button" id="addSectionBtn">افزودن بخش</button>
-          <button type="button" class="ghost" id="sectionsFromRolesBtn" disabled>ساخت از روی سمت‌ها</button>
+          <input id="sectionNameInput" type="text" placeholder="نام بخش یا زیرمجموعه، مثلاً مدیر عامل" />
+          <select id="sectionParentSelect" aria-label="بخش والد">
+            <option value="">— بخش اصلی (مجموعه کلی) —</option>
+          </select>
+          <button type="button" id="addSectionBtn">افزودن</button>
+          <button type="button" class="ghost" id="sectionsFromRolesBtn" disabled>از روی سمت‌ها</button>
         </div>
         <div class="sections" id="sectionsList">
           <div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>
@@ -1019,10 +1044,11 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۸: جمع‌وجور کردن ستون عملیات بخش در دو ستون
-    const APP_VERSION = 8;
+    // نسخه ۹: بخش‌های سلسله‌مراتبی (مجموعه / زیرمجموعه)
+    const APP_VERSION = 9;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
+    const SECTION_PATH_SEP = " » ";
 
     const state = {
       people: [],
@@ -1044,6 +1070,7 @@
       sectionsList: document.getElementById("sectionsList"),
       sectionsMeta: document.getElementById("sectionsMeta"),
       sectionNameInput: document.getElementById("sectionNameInput"),
+      sectionParentSelect: document.getElementById("sectionParentSelect"),
       addSectionBtn: document.getElementById("addSectionBtn"),
       sectionsFromRolesBtn: document.getElementById("sectionsFromRolesBtn"),
       autoAssignBtn: document.getElementById("autoAssignBtn"),
@@ -1602,12 +1629,12 @@
         </div>`;
 
       const groups = [];
-      for (const section of state.sections) {
+      for (const { section } of flattenSectionsTree()) {
         const members = bySection.get(section.id) || [];
         if (!members.length) continue;
         groups.push(`
           <article class="daily-group">
-            <h3>${escapeHtml(section.title)} (${members.length})</h3>
+            <h3>${escapeHtml(sectionPathLabel(section))} (${members.length})</h3>
             <table class="modal-table">
               <thead>
                 <tr>
@@ -1747,10 +1774,10 @@
         }
       }
 
-      for (const section of state.sections) {
+      for (const { section } of flattenSectionsTree()) {
         const members = grouped.get(section.id) || [];
         if (!members.length) continue;
-        bodyParts.push(wordParagraph(section.title, { bold: true, size: 26, spaceBefore: 120, spaceAfter: 100 }));
+        bodyParts.push(wordParagraph(sectionPathLabel(section), { bold: true, size: 26, spaceBefore: 120, spaceAfter: 100 }));
         bodyParts.push(wordPeopleTable(members));
       }
       const none = grouped.get("__none__") || [];
@@ -1926,7 +1953,8 @@
                   <td>
                     <div class="row-actions">
                       ${ids.map((id) => {
-                        const title = state.sections.find((s) => s.id === id)?.title || "بخش";
+                        const section = state.sections.find((s) => s.id === id);
+                        const title = section ? sectionPathLabel(section) : "بخش";
                         return `<button type="button" class="ghost small open-from-search" data-section-id="${escapeHtml(id)}">${escapeHtml(title)}</button>`;
                       }).join("")}
                       ${!ids.length ? `<span class="meta">هنوز در بخشی نیست</span>` : ""}
@@ -1946,9 +1974,103 @@
       els.searchResults.innerHTML = `<div class="empty">برای شروع، داخل کادر بالا بنویسید.</div>`;
     }
 
-    function findSectionByTitle(title) {
+    function findSectionByTitle(title, parentId = undefined) {
       const normalized = normalizeLabel(title);
-      return state.sections.find((s) => normalizeLabel(s.title) === normalized);
+      return state.sections.find((s) => {
+        if (normalizeLabel(s.title) !== normalized) return false;
+        if (parentId === undefined) return true;
+        return (s.parentId || "") === (parentId || "");
+      });
+    }
+
+    function normalizeSection(section) {
+      if (!section) return section;
+      if (!Array.isArray(section.memberOrder)) section.memberOrder = [];
+      if (section.parentId === undefined || section.parentId === "") section.parentId = null;
+      // drop broken parent links
+      if (section.parentId && !state.sections.some((s) => s.id === section.parentId)) {
+        section.parentId = null;
+      }
+      return section;
+    }
+
+    function getChildSections(parentId = null) {
+      const key = parentId || null;
+      return state.sections.filter((s) => (s.parentId || null) === key);
+    }
+
+    function sectionAncestors(section) {
+      const chain = [];
+      let current = section;
+      const seen = new Set();
+      while (current) {
+        if (seen.has(current.id)) break;
+        seen.add(current.id);
+        chain.unshift(current);
+        current = current.parentId
+          ? state.sections.find((s) => s.id === current.parentId)
+          : null;
+      }
+      return chain;
+    }
+
+    function sectionPathTitles(section) {
+      return sectionAncestors(section).map((s) => s.title);
+    }
+
+    function sectionPathLabel(section) {
+      if (!section) return "";
+      return sectionPathTitles(section).join(SECTION_PATH_SEP);
+    }
+
+    function sectionDepth(section) {
+      return Math.max(0, sectionAncestors(section).length - 1);
+    }
+
+    function flattenSectionsTree(parentId = null, depth = 0, acc = []) {
+      const children = getChildSections(parentId)
+        .slice()
+        .sort((a, b) => String(a.title).localeCompare(String(b.title), "fa"));
+      for (const child of children) {
+        acc.push({ section: child, depth });
+        flattenSectionsTree(child.id, depth + 1, acc);
+      }
+      return acc;
+    }
+
+    function collectDescendantIds(sectionId) {
+      const ids = [];
+      const walk = (id) => {
+        for (const child of getChildSections(id)) {
+          ids.push(child.id);
+          walk(child.id);
+        }
+      };
+      walk(sectionId);
+      return ids;
+    }
+
+    function deleteSectionTree(sectionId) {
+      const ids = [sectionId, ...collectDescendantIds(sectionId)];
+      const idSet = new Set(ids);
+      state.sections = state.sections.filter((s) => !idSet.has(s.id));
+      state.people.forEach((p) => {
+        ids.forEach((id) => removePersonFromSection(p, id));
+      });
+      if (activeSectionId && idSet.has(activeSectionId)) closeSectionModal();
+    }
+
+    function refreshSectionParentOptions(selectedId = "") {
+      if (!els.sectionParentSelect) return;
+      const current = selectedId || els.sectionParentSelect.value || "";
+      const options = [`<option value="">— بخش اصلی (مجموعه کلی) —</option>`];
+      for (const { section, depth } of flattenSectionsTree()) {
+        const pad = "—".repeat(depth);
+        const label = `${pad ? `${pad} ` : ""}${sectionPathLabel(section)}`;
+        const selected = section.id === current ? "selected" : "";
+        options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(label)}</option>`);
+      }
+      els.sectionParentSelect.innerHTML = options.join("");
     }
 
     function findSectionForRole(role) {
@@ -2129,7 +2251,10 @@
 
     function sectionTitlesForPerson(person) {
       return getSectionIds(person)
-        .map((id) => state.sections.find((s) => s.id === id)?.title)
+        .map((id) => {
+          const section = state.sections.find((s) => s.id === id);
+          return section ? sectionPathLabel(section) : "";
+        })
         .filter(Boolean);
     }
 
@@ -2194,10 +2319,13 @@
         }
         return person;
       });
-      state.sections = (payload.sections || []).map((section) => ({
+      state.sections = (payload.sections || []).map((section) => normalizeSection({
         ...section,
+        parentId: section.parentId || null,
         memberOrder: Array.isArray(section.memberOrder) ? section.memberOrder.slice() : [],
       }));
+      // second pass after all sections exist
+      state.sections.forEach(normalizeSection);
       for (const section of state.sections) {
         peopleInSection(section.id); // sync memberOrder with current members
       }
@@ -2352,6 +2480,7 @@
       els.runAccuracyBtn.disabled = !hasPeople;
       updateUndoBtn();
       refreshManualSectionOptions();
+      refreshSectionParentOptions();
 
       renderPeople();
       renderSections();
@@ -2367,16 +2496,19 @@
 
       if (activeSectionId) {
         const stillExists = state.sections.some((s) => s.id === activeSectionId);
-        if (!stillExists || !peopleInSection(activeSectionId).length) closeSectionModal();
+        if (!stillExists) closeSectionModal();
         else openSectionModal(activeSectionId, { silent: true });
       }
     }
 
-    function sectionOptions(selectedId, { includeEmpty = true, emptyLabel = "— انتخاب بخش —" } = {}) {
+    function sectionOptions(selectedId, { includeEmpty = true, emptyLabel = "— انتخاب بخش —", excludeIds = [] } = {}) {
+      const excluded = new Set(excludeIds);
       const options = includeEmpty ? [`<option value="">${escapeHtml(emptyLabel)}</option>`] : [];
-      for (const section of state.sections) {
+      for (const { section, depth } of flattenSectionsTree()) {
+        if (excluded.has(section.id)) continue;
         const selected = section.id === selectedId ? "selected" : "";
-        options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(section.title)}</option>`);
+        const pad = depth ? `${"—".repeat(depth)} ` : "";
+        options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(pad + sectionPathLabel(section))}</option>`);
       }
       return options.join("");
     }
@@ -2440,23 +2572,31 @@
 
     function renderSections() {
       if (!state.sections.length) {
-        els.sectionsList.innerHTML = `<div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>`;
+        els.sectionsList.innerHTML = `<div class="empty">هنوز بخشی ندارید. یک مجموعه کلی بسازید یا زیرمجموعه تعریف کنید.</div>`;
         return;
       }
 
-      els.sectionsList.innerHTML = state.sections.map((section) => {
+      els.sectionsList.innerHTML = flattenSectionsTree().map(({ section, depth }) => {
         const count = peopleInSection(section.id).length;
+        const childCount = getChildSections(section.id).length;
         const hasMembers = count > 0;
+        const path = sectionPathLabel(section);
+        const indent = Math.min(depth, 6) * 0.85;
         return `
-          <article class="bucket ${hasMembers ? "has-members" : ""}" data-section-id="${escapeHtml(section.id)}">
+          <article class="bucket ${hasMembers ? "has-members" : ""} ${depth ? "nested" : ""}" data-section-id="${escapeHtml(section.id)}" style="margin-inline-start:${indent}rem">
             <div class="bucket-head">
-              <div class="bucket-title-wrap open-section" data-section-id="${escapeHtml(section.id)}" ${hasMembers ? 'role="button" tabindex="0"' : ""}>
-                <h3>${escapeHtml(section.title)}</h3>
+              <div class="bucket-title-wrap open-section" data-section-id="${escapeHtml(section.id)}" role="button" tabindex="0">
+                <div>
+                  <h3>${escapeHtml(section.title)}</h3>
+                  ${depth ? `<span class="bucket-path">${escapeHtml(path)}</span>` : ""}
+                  ${childCount ? `<span class="bucket-path">${childCount} زیرمجموعه</span>` : ""}
+                </div>
                 <span class="count-badge ${hasMembers ? "" : "empty"}">${count}</span>
               </div>
               <div class="bucket-actions">
+                <button type="button" class="ghost small add-child-section" data-section-id="${escapeHtml(section.id)}">زیرمجموعه</button>
                 <button type="button" class="ghost small rename-section" data-section-id="${escapeHtml(section.id)}">تغییر نام</button>
-                <button type="button" class="danger small delete-section" data-section-id="${escapeHtml(section.id)}">حذف بخش</button>
+                <button type="button" class="danger small delete-section" data-section-id="${escapeHtml(section.id)}">حذف</button>
               </div>
             </div>
           </article>
@@ -2465,10 +2605,25 @@
     }
 
     function sectionMembersHtml(members, currentSectionId) {
+      const children = getChildSections(currentSectionId);
+      const childBar = children.length ? `
+        <div class="child-sections">
+          ${children.map((child) => `
+            <button type="button" class="ghost small open-child-section" data-section-id="${escapeHtml(child.id)}">
+              زیرمجموعه: ${escapeHtml(child.title)} (${peopleInSection(child.id).length})
+            </button>
+          `).join("")}
+        </div>
+      ` : "";
+
       if (!members.length) {
-        return `<div class="empty">کسی در این بخش نیست.</div>`;
+        return `
+          ${childBar}
+          <div class="empty">کسی مستقیماً در این بخش نیست.${children.length ? " از زیرمجموعه‌ها استفاده کنید یا نفر اضافه کنید." : ""}</div>
+        `;
       }
       return `
+        ${childBar}
         <table class="modal-table">
           <thead>
             <tr>
@@ -2481,10 +2636,12 @@
           <tbody>
             ${members.map((person, index) => {
               const ids = getSectionIds(person);
-              const otherSections = state.sections.filter((s) => !ids.includes(s.id));
+              const otherSections = flattenSectionsTree()
+                .map(({ section }) => section)
+                .filter((s) => !ids.includes(s.id));
               const addOptions = [
                 `<option value="">— افزودن به بخش دیگر —</option>`,
-                ...otherSections.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.title)}</option>`),
+                ...otherSections.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(sectionPathLabel(s))}</option>`),
               ].join("");
               const moveOptions = sectionOptions("", {
                 emptyLabel: "— فقط خروج از این بخش —",
@@ -2549,14 +2706,14 @@
                         </div>
                       </div>
                       <div class="ops-field">
-                        <label class="meta" for="move-${escapeHtml(person.id)}">جابه‌جایی</label>
-                        <select id="move-${escapeHtml(person.id)}" class="move-section-select" data-id="${escapeHtml(person.id)}" data-from-section="${escapeHtml(currentSectionId)}" aria-label="جابه‌جایی ${escapeHtml(person.name)}">
+                        <div class="meta">جابه‌جایی</div>
+                        <select class="move-section-select" data-id="${escapeHtml(person.id)}" data-from-section="${escapeHtml(currentSectionId)}" aria-label="جابه‌جایی ${escapeHtml(person.name)}">
                           ${moveOptions}
                         </select>
                       </div>
                       <div class="ops-field">
-                        <label class="meta" for="add-${escapeHtml(person.id)}">افزودن به بخش</label>
-                        <select id="add-${escapeHtml(person.id)}" class="add-section-select" data-id="${escapeHtml(person.id)}" aria-label="افزودن ${escapeHtml(person.name)} به بخش دیگر" ${otherSections.length ? "" : "disabled"}>
+                        <div class="meta">افزودن به بخش</div>
+                        <select class="add-section-select" data-id="${escapeHtml(person.id)}" aria-label="افزودن ${escapeHtml(person.name)} به بخش دیگر" ${otherSections.length ? "" : "disabled"}>
                           ${addOptions}
                         </select>
                       </div>
@@ -2574,13 +2731,13 @@
       const section = state.sections.find((s) => s.id === sectionId);
       if (!section) return;
       const members = peopleInSection(section.id);
-      if (!members.length) {
-        if (!silent) toast("این بخش هنوز عضوی ندارد");
-        closeSectionModal();
-        return;
+      const children = getChildSections(section.id);
+      if (!members.length && !children.length && !silent) {
+        toast("این بخش هنوز عضوی ندارد");
       }
       activeSectionId = section.id;
-      els.sectionModalTitle.textContent = `${section.title} (${members.length})`;
+      const path = sectionPathLabel(section);
+      els.sectionModalTitle.textContent = `${path} (${members.length})`;
       els.sectionModalBody.innerHTML = sectionMembersHtml(members, section.id);
       els.sectionModal.hidden = false;
     }
@@ -2615,7 +2772,7 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <title>${escapeHtml(section.title)}</title>
+  <title>${escapeHtml(sectionPathLabel(section))}</title>
   <style>
     body { font-family: Tahoma, sans-serif; color: #1a2420; padding: 24px; }
     h1 { font-size: 20px; margin: 0 0 16px; }
@@ -2626,7 +2783,7 @@
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(section.title)}</h1>
+  <h1>${escapeHtml(sectionPathLabel(section))}</h1>
   <table>
     <thead>
       <tr>
@@ -2705,26 +2862,36 @@
       }
 
       const bodyParts = [
-        wordParagraph(section.title, { bold: true, size: 32, align: "center", spaceAfter: 200 }),
+        wordParagraph(sectionPathLabel(section), { bold: true, size: 32, align: "center", spaceAfter: 200 }),
         wordPeopleTable(members),
       ];
-      const safeName = section.title.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+      const safeName = sectionPathLabel(section).replace(/[\\/:*?"<>|»]+/g, "-").slice(0, 60);
       await downloadDocx(bodyParts, `بخش-${safeName}.docx`);
-      toast(`خروجی Word بخش «${section.title}» ذخیره شد`);
+      toast(`خروجی Word بخش «${sectionPathLabel(section)}» ذخیره شد`);
     }
 
-    function addSection(title, { silent = false } = {}) {
+    function addSection(title, { silent = false, parentId = null } = {}) {
       const clean = normalizeLabel(title);
       if (!clean) {
         if (!silent) toast("نام بخش را وارد کنید");
         return null;
       }
-      const existing = findSectionByTitle(clean);
+      const parent = parentId ? state.sections.find((s) => s.id === parentId) : null;
+      if (parentId && !parent) {
+        if (!silent) toast("بخش والد پیدا نشد");
+        return null;
+      }
+      const existing = findSectionByTitle(clean, parentId || null);
       if (existing) {
-        if (!silent) toast("این بخش از قبل وجود دارد");
+        if (!silent) toast("زیر این مجموعه، بخشی با این نام هست");
         return existing;
       }
-      const section = { id: uid("sec"), title: clean, memberOrder: [] };
+      const section = normalizeSection({
+        id: uid("sec"),
+        title: clean,
+        parentId: parentId || null,
+        memberOrder: [],
+      });
       state.sections.push(section);
       return section;
     }
@@ -2764,14 +2931,14 @@
 
     function buildSummaryText() {
       const blocks = [];
-      for (const section of state.sections) {
+      for (const { section } of flattenSectionsTree()) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
         const header = "ردیف\tنام و نام خانوادگی\tتاریخ تولد\tکد ملی\tتلفن";
         const rows = members.map((p, i) =>
           [i + 1, p.name, p.birthDate || "—", p.nationalId || "—", p.phone || "—"].join("\t")
         );
-        blocks.push(`${section.title}\n${header}\n${rows.join("\n")}`);
+        blocks.push(`${sectionPathLabel(section)}\n${header}\n${rows.join("\n")}`);
       }
       return blocks.join("\n\n");
     }
@@ -3143,11 +3310,11 @@
         spaceAfter: 280,
       }));
 
-      for (const section of state.sections) {
+      for (const { section } of flattenSectionsTree()) {
         const members = peopleInSection(section.id);
         if (!members.length) continue;
 
-        bodyParts.push(wordParagraph(section.title, {
+        bodyParts.push(wordParagraph(sectionPathLabel(section), {
           bold: true,
           size: 26,
           align: "right",
@@ -3403,18 +3570,20 @@
 
     els.addSectionBtn.addEventListener("click", () => {
       const title = els.sectionNameInput.value;
+      const parentId = els.sectionParentSelect.value || null;
       if (!normalizeLabel(title)) {
         toast("نام بخش را وارد کنید");
         return;
       }
-      if (findSectionByTitle(title)) {
-        toast("این بخش از قبل وجود دارد");
+      if (findSectionByTitle(title, parentId)) {
+        toast(parentId ? "زیر این مجموعه، بخشی با این نام هست" : "این بخش اصلی از قبل وجود دارد");
         return;
       }
-      const section = withChange("افزودن بخش", () => addSection(title));
+      const section = withChange("افزودن بخش", () => addSection(title, { parentId }));
       if (!section) return;
       els.sectionNameInput.value = "";
-      toast(`بخش «${section.title}» اضافه شد`);
+      const label = sectionPathLabel(section);
+      toast(parentId ? `زیرمجموعه «${label}» اضافه شد` : `مجموعه «${section.title}» اضافه شد`);
     });
 
     els.sectionNameInput.addEventListener("keydown", (e) => {
@@ -3669,6 +3838,27 @@
     });
 
     els.sectionsList.addEventListener("click", (e) => {
+      const addChildBtn = e.target.closest(".add-child-section");
+      if (addChildBtn) {
+        e.stopPropagation();
+        const parentId = addChildBtn.dataset.sectionId;
+        const parent = state.sections.find((s) => s.id === parentId);
+        if (!parent) return;
+        const next = prompt(`نام زیرمجموعه زیر «${sectionPathLabel(parent)}»:`, "");
+        if (next === null) return;
+        if (!normalizeLabel(next)) {
+          toast("نام زیرمجموعه نمی‌تواند خالی باشد");
+          return;
+        }
+        if (findSectionByTitle(next, parentId)) {
+          toast("زیر این مجموعه، بخشی با این نام هست");
+          return;
+        }
+        const section = withChange("افزودن زیرمجموعه", () => addSection(next, { parentId }));
+        if (section) toast(`زیرمجموعه «${sectionPathLabel(section)}» اضافه شد`);
+        return;
+      }
+
       const renameBtn = e.target.closest(".rename-section");
       if (renameBtn) {
         e.stopPropagation();
@@ -3681,9 +3871,9 @@
           toast("نام بخش نمی‌تواند خالی باشد");
           return;
         }
-        const clash = findSectionByTitle(clean);
+        const clash = findSectionByTitle(clean, section.parentId || null);
         if (clash && clash.id !== section.id) {
-          toast("بخش دیگری با این نام وجود دارد");
+          toast("زیر همین مجموعه، بخشی با این نام هست");
           return;
         }
         withChange("تغییر نام بخش", () => {
@@ -3696,16 +3886,21 @@
       if (deleteBtn) {
         e.stopPropagation();
         const sectionId = deleteBtn.dataset.sectionId;
+        const section = state.sections.find((s) => s.id === sectionId);
+        const childCount = collectDescendantIds(sectionId).length;
+        const msg = childCount
+          ? `«${section ? sectionPathLabel(section) : ""}» با ${childCount} زیرمجموعه حذف شود؟`
+          : `«${section ? sectionPathLabel(section) : ""}» حذف شود؟`;
+        if (!confirm(msg)) return;
         withChange("حذف بخش", () => {
-          state.sections = state.sections.filter((s) => s.id !== sectionId);
-          state.people.forEach((p) => removePersonFromSection(p, sectionId));
-          if (activeSectionId === sectionId) closeSectionModal();
+          deleteSectionTree(sectionId);
         });
         return;
       }
 
-      const openTarget = e.target.closest(".open-section, .bucket.has-members");
+      const openTarget = e.target.closest(".open-section, .bucket");
       if (openTarget) {
+        if (e.target.closest(".bucket-actions")) return;
         const sectionId = openTarget.dataset.sectionId || openTarget.closest("[data-section-id]")?.dataset.sectionId;
         if (sectionId) openSectionModal(sectionId);
       }
@@ -3720,6 +3915,12 @@
     });
 
     els.sectionModalBody.addEventListener("click", (e) => {
+      const openChild = e.target.closest(".open-child-section");
+      if (openChild) {
+        openSectionModal(openChild.dataset.sectionId);
+        return;
+      }
+
       const moveUp = e.target.closest(".move-up");
       if (moveUp) {
         withChange("جابه‌جایی ترتیب", () => {
