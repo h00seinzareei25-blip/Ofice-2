@@ -506,6 +506,27 @@
       color: var(--danger);
     }
 
+    .multi-section-flag {
+      display: grid;
+      gap: 0.3rem;
+      margin-bottom: 0.55rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 10px;
+      border: 1px solid #e0c49a;
+      background: #fff7ec;
+      color: #8a4f16;
+      line-height: 1.55;
+    }
+
+    .multi-section-flag strong {
+      font-size: 0.88rem;
+    }
+
+    .multi-section-flag .section-list {
+      font-size: 0.84rem;
+      white-space: normal;
+    }
+
     .accuracy-bar {
       margin-top: 0.75rem;
       padding: 0.75rem 0.9rem;
@@ -1528,7 +1549,14 @@
                     <div class="meta" style="margin-top:0.2rem">${escapeHtml(person.phone || "—")}</div>
                   </td>
                   <td>${escapeHtml(formatDateTime(person.registeredAt))}</td>
-                  <td>${titles.length ? escapeHtml(titles.join("، ")) : "باقیمانده"}</td>
+                  <td>
+                    ${titles.length > 1 ? `
+                      <div class="multi-section-flag" style="margin-bottom:0">
+                        <strong>★ عضو ${titles.length} بخش</strong>
+                        <div class="section-list">${escapeHtml(titles.join(" · "))}</div>
+                      </div>
+                    ` : titles.length ? escapeHtml(titles.join(" · ")) : "باقیمانده"}
+                  </td>
                   <td>
                     <div class="row-actions">
                       ${ids.map((id) => {
@@ -1908,7 +1936,6 @@
                       <span class="chip">${escapeHtml(person.phone || "—")}</span>
                       ${personAccuracyChips(person)}
                     </div>
-                    ${titles.length > 1 ? `<div class="meta" style="margin-top:0.35rem;white-space:normal">بخش‌ها: ${escapeHtml(titles.join("، "))}</div>` : ""}
                   </div>
                   <div class="edit-mode" hidden>
                     <div class="edit-grid">
@@ -1929,6 +1956,15 @@
                   <div class="meta" style="margin-top:0.2rem;white-space:normal">روز: ${escapeHtml(formatDateOnly(person.registeredAt))}</div>
                 </td>
                 <td>
+                  ${titles.length > 1 ? `
+                    <div class="multi-section-flag">
+                      <strong>★ عضو ${titles.length} بخش</strong>
+                      <div class="section-list">در بخش‌ها: ${escapeHtml(titles.join(" · "))}</div>
+                      <div class="section-list">همین لیست: ${escapeHtml(state.sections.find((s) => s.id === currentSectionId)?.title || "—")}</div>
+                    </div>
+                  ` : `
+                    <div class="meta" style="margin-bottom:0.45rem;white-space:normal">فقط در این بخش</div>
+                  `}
                   <div class="row-actions">
                     <button type="button" class="ghost small edit-person" data-id="${escapeHtml(person.id)}">ویرایش</button>
                     <button type="button" class="danger small delete-person" data-id="${escapeHtml(person.id)}">حذف</button>
