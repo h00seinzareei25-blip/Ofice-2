@@ -316,52 +316,82 @@
     }
 
     .bucket.depth-1 {
-      border-color: #c4b08a;
-      background: #fffaf2;
+      border-color: #b7d6c4;
+      background: #f5fbf7;
     }
 
     .bucket.depth-1 .bucket-head {
-      background: #f3e6d2;
+      background: #e7f4ec;
     }
 
     .bucket.depth-2 {
-      border-color: #8eafc4;
-      background: #f3f8fc;
+      border-color: #a5ceb6;
+      background: #eef8f2;
     }
 
     .bucket.depth-2 .bucket-head {
-      background: #dceaf3;
+      background: #ddf0e5;
     }
 
     .bucket.depth-3,
     .bucket.depth-4,
     .bucket.depth-5,
     .bucket.depth-6 {
-      border-color: #b49bc4;
-      background: #f8f3fc;
+      border-color: #93c5a8;
+      background: #e8f5ee;
     }
 
     .bucket.depth-3 .bucket-head,
     .bucket.depth-4 .bucket-head,
     .bucket.depth-5 .bucket-head,
     .bucket.depth-6 .bucket-head {
-      background: #ebe0f3;
+      background: #d4ecde;
     }
 
     .bucket.depth-1.has-members:hover {
-      border-color: #b8955f;
-      background: #fff6e8;
+      border-color: #8fbfa3;
+      background: #eef8f2;
     }
 
     .bucket.depth-2.has-members:hover {
-      border-color: #6f98b3;
-      background: #ebf4fa;
+      border-color: #7db593;
+      background: #e5f3eb;
     }
 
     .child-sections .open-child-section {
-      background: #fffaf2;
-      border-color: #c4b08a;
-      color: #7a5a28;
+      background: #f0f8f3;
+      border-color: #b7d6c4;
+      color: #2f6b4c;
+    }
+
+    .sorted-import-panel {
+      margin: 0.9rem 0;
+      padding: 0.85rem 1rem 1rem;
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .sorted-import-controls {
+      display: grid;
+      grid-template-columns: 1.4fr auto;
+      gap: 0.45rem;
+      align-items: end;
+    }
+
+    .sorted-import-controls label {
+      display: grid;
+      gap: 0.28rem;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .sorted-import-hint {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 700px) {
+      .sorted-import-controls { grid-template-columns: 1fr; }
     }
 
     .bucket-path {
@@ -924,7 +954,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۰ (ثابت)</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۱</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -991,6 +1021,24 @@
       <div><span class="btn">انتخاب فایل</span></div>
       <input id="fileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
     </label>
+
+    <div class="panel sorted-import-panel" id="sortedImportPanel">
+      <div class="section-head">
+        <h2>ورود ورد تفکیک‌شده</h2>
+        <span class="meta">خروجی قبلی همین برنامه</span>
+      </div>
+      <div class="sorted-import-controls">
+        <label>قرارگیری زیر این بخش (اختیاری)
+          <select id="sortedImportParent">
+            <option value="">— همان عنوان‌های داخل فایل —</option>
+          </select>
+        </label>
+        <button type="button" class="ghost" id="sortedImportBtn">انتخاب فایل تفکیک‌شده</button>
+        <input id="sortedImportInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
+      </div>
+      <p class="meta sorted-import-hint">افراد واردشده با علامت «تفکیک‌شده» مشخص می‌شوند و مستقیم داخل بخش مربوط به عنوان‌شان می‌روند.</p>
+    </div>
+
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
     <div class="accuracy-bar" id="accuracyBar">هنوز بررسی دقت انجام نشده است.</div>
@@ -1070,7 +1118,8 @@
 
     <p class="panel preview-note">
       هر بخش می‌تواند مجموعه کلی باشد و زیرمجموعه بگیرد (مثلاً مدیر عامل » سپاه » نیرو انتظامی).
-      زیرمجموعه‌ها با رنگ جدا مشخص‌اند. هرجا خروجی Word هست، خروجی Excel هم هست.
+      زیرمجموعه‌ها سبز کمرنگ‌اند. هرجا خروجی Word هست، خروجی Excel هم هست.
+      فایل وردِ از‌قبل‌تفکیک‌شده را از بخش «ورود ورد تفکیک‌شده» وارد کنید؛ افراد با علامت «تفکیک‌شده» مشخص می‌شوند.
     </p>
   </div>
 
@@ -1096,9 +1145,9 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۰ قفل/ثابت شد. هر تغییر بعدی باید APP_VERSION را به ۱۱ (و بعدتر) افزایش دهد.
-    const APP_VERSION = 10;
-    const APP_VERSION_FROZEN = true;
+    // نسخه ۱۱: ورود ورد تفکیک‌شده + سبز کمرنگ زیرمجموعه‌ها
+    const APP_VERSION = 11;
+    const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const SECTION_PATH_SEP = " » ";
 
@@ -1115,6 +1164,9 @@
     const els = {
       dropzone: document.getElementById("dropzone"),
       fileInput: document.getElementById("fileInput"),
+      sortedImportBtn: document.getElementById("sortedImportBtn"),
+      sortedImportInput: document.getElementById("sortedImportInput"),
+      sortedImportParent: document.getElementById("sortedImportParent"),
       status: document.getElementById("status"),
       backupMeta: document.getElementById("backupMeta"),
       peopleList: document.getElementById("peopleList"),
@@ -1595,9 +1647,99 @@
     }
 
     function personAccuracyChips(person) {
+      const chips = [];
+      if (person.sortedImport) {
+        chips.push(`<span class="chip sorted-import" title="از فایل ورد تفکیک‌شده وارد شده">تفکیک‌شده</span>`);
+      }
       const issues = validatePersonFields(person);
-      if (!issues.length) return "";
-      return issues.map((issue) => `<span class="chip danger-chip">${escapeHtml(issue)}</span>`).join("");
+      for (const issue of issues) {
+        chips.push(`<span class="chip danger-chip">${escapeHtml(issue)}</span>`);
+      }
+      return chips.join("");
+    }
+
+    function stripDirectionalMarks(value) {
+      return String(value || "").replace(/[\u200e\u200f\u202a-\u202e]/g, "").trim();
+    }
+
+    function isSkippedSortedHeading(text) {
+      const clean = normalizeLabel(text);
+      return !clean || /^(لیست تفکیک‌شده مهمانان|گزارش روزانه مهمانان|بدون بخش|روز:)/.test(clean);
+    }
+
+    function isSortedPeopleHeader(texts) {
+      const joined = texts.map((t) => normalizeLabel(stripDirectionalMarks(t))).join(" ");
+      return joined.includes("نام و نام خانوادگی") && joined.includes("کد ملی");
+    }
+
+    function parseSortedTablePeople(table, sourceFile) {
+      const rows = [...table.getElementsByTagNameNS(W_NS, "tr")];
+      const people = [];
+      rows.forEach((tr, index) => {
+        const cells = [...tr.children].filter((el) => el.localName === "tc");
+        if (cells.length < 5) return;
+        const texts = cells.map((tc) => stripDirectionalMarks(exactCellText(tc)));
+        if (isSortedPeopleHeader(texts)) return;
+        if (texts.every((t) => !t || t === "—" || t === "-")) return;
+
+        const row = texts[0] || String(index);
+        const name = texts[1] || "";
+        const birthDate = texts[2] || "";
+        const nationalId = texts[3] || "";
+        const phone = texts[4] || "";
+        if (!normalizeLabel(name)) return;
+        if (isHeaderLabel(name)) return;
+
+        people.push({
+          id: `${sourceFile}::sorted::${row}::${name}::${nationalId}::${phone}::${index}`,
+          row: String(row),
+          name,
+          role: "",
+          birthDate: birthDate === "—" ? "" : birthDate,
+          nationalId: nationalId === "—" ? "" : nationalId,
+          phone: phone === "—" ? "" : phone,
+          sourceFile,
+          sectionIds: [],
+          registeredAt: null,
+          assignedAt: null,
+          sortedImport: true,
+        });
+      });
+      return people;
+    }
+
+    function parseSortedDocxXml(xmlText, sourceFile) {
+      const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+      const body = [...doc.getElementsByTagNameNS(W_NS, "body")][0];
+      if (!body) return [];
+
+      const groups = [];
+      let currentTitle = "";
+
+      for (const child of [...body.children]) {
+        if (child.localName === "p") {
+          const text = normalizeLabel(stripDirectionalMarks(exactCellText(child)));
+          if (!text || isSkippedSortedHeading(text)) continue;
+          currentTitle = text;
+          continue;
+        }
+        if (child.localName !== "tbl") continue;
+        const people = parseSortedTablePeople(child, sourceFile);
+        if (!people.length) continue;
+        groups.push({
+          title: currentTitle || "بدون عنوان",
+          people,
+        });
+      }
+      return groups;
+    }
+
+    async function readSortedDocxFile(file) {
+      const zip = await JSZip.loadAsync(file);
+      const docFile = zip.file("word/document.xml");
+      if (!docFile) throw new Error(`ساختار ورد نامعتبر است: ${file.name}`);
+      const xml = await docFile.async("string");
+      return parseSortedDocxXml(xml, file.name);
     }
 
     function sameCalendarDay(iso, dayFilter) {
@@ -2127,6 +2269,20 @@
         options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(label)}</option>`);
       }
       els.sectionParentSelect.innerHTML = options.join("");
+      refreshSortedImportParentOptions();
+    }
+
+    function refreshSortedImportParentOptions() {
+      if (!els.sortedImportParent) return;
+      const current = els.sortedImportParent.value || "";
+      const options = [`<option value="">— همان عنوان‌های داخل فایل —</option>`];
+      for (const { section, depth } of flattenSectionsTree()) {
+        const pad = "—".repeat(depth);
+        const label = `${pad ? `${pad} ` : ""}${sectionPathLabel(section)}`;
+        const selected = section.id === current ? "selected" : "";
+        options.push(`<option value="${escapeHtml(section.id)}" ${selected}>${escapeHtml(label)}</option>`);
+      }
+      els.sortedImportParent.innerHTML = options.join("");
     }
 
     function findSectionForRole(role) {
@@ -3107,6 +3263,118 @@
       return section;
     }
 
+    function ensureSectionPath(pathLabel, rootParentId = null) {
+      const raw = normalizeLabel(pathLabel);
+      if (!raw) return null;
+      if (raw === "بدون عنوان" || raw === "بدون بخش") return null;
+
+      const parts = raw
+        .split(SECTION_PATH_SEP)
+        .map((part) => normalizeLabel(part))
+        .filter(Boolean);
+      if (!parts.length) return null;
+
+      let parentId = rootParentId || null;
+      let leaf = null;
+      for (const part of parts) {
+        leaf = findSectionByTitle(part, parentId);
+        if (!leaf) {
+          leaf = addSection(part, { silent: true, parentId });
+        }
+        if (!leaf) return null;
+        parentId = leaf.id;
+      }
+      return leaf;
+    }
+
+    function importSortedGroups(groups, { rootParentId = null, sourceFiles = [] } = {}) {
+      const registeredAt = nowIso();
+      let addedPeople = 0;
+      let linkedPeople = 0;
+      let sectionCount = 0;
+      const beforeSections = state.sections.length;
+
+      for (const group of groups) {
+        const isUnassignedGroup = normalizeLabel(group.title) === "بدون بخش"
+          || normalizeLabel(group.title) === "بدون عنوان";
+        const section = isUnassignedGroup
+          ? null
+          : ensureSectionPath(group.title, rootParentId);
+
+        for (const incoming of group.people || []) {
+          incoming.sortedImport = true;
+          incoming.sourceFile = incoming.sourceFile || sourceFiles[0] || "ورود تفکیک‌شده";
+
+          const existing = state.people.find((p) => identityKey(p) === identityKey(incoming))
+            || state.people.find((p) => personKey(p) === personKey(incoming));
+
+          if (existing) {
+            existing.sortedImport = true;
+            if (section) {
+              const added = addPersonToSection(existing, section.id);
+              if (added) linkedPeople += 1;
+            }
+            continue;
+          }
+
+          incoming.registeredAt = registeredAt;
+          incoming.assignedAt = null;
+          incoming.sectionIds = [];
+          if (section) addPersonToSection(incoming, section.id);
+          state.people.push(incoming);
+          addedPeople += 1;
+        }
+      }
+
+      sectionCount = Math.max(0, state.sections.length - beforeSections);
+      return { addedPeople, linkedPeople, sectionCount, groupCount: groups.length };
+    }
+
+    async function handleSortedImportFiles(fileList) {
+      const files = [...fileList].filter((f) => /\.docx$/i.test(f.name));
+      if (!files.length) {
+        toast("فقط فایل‌های .docx پشتیبانی می‌شوند");
+        return;
+      }
+
+      setStatus("در حال خواندن ورد تفکیک‌شده...", "");
+      const allGroups = [];
+      const errors = [];
+      for (const file of files) {
+        try {
+          const groups = await readSortedDocxFile(file);
+          allGroups.push(...groups);
+        } catch (err) {
+          console.error(err);
+          errors.push(file.name);
+        }
+      }
+
+      if (!allGroups.length) {
+        setStatus(
+          errors.length
+            ? `خطا در خواندن فایل‌ها: ${errors.join("، ")}`
+            : "در فایل تفکیک‌شده بخشی پیدا نشد.",
+          "error"
+        );
+        return;
+      }
+
+      const rootParentId = els.sortedImportParent.value || null;
+      pushUndo("ورود ورد تفکیک‌شده");
+      const result = importSortedGroups(allGroups, {
+        rootParentId,
+        sourceFiles: files.map((f) => f.name),
+      });
+      commit();
+      setStatus(
+        `${result.addedPeople} نفر جدید + ${result.linkedPeople} اتصال به بخش | ${result.sectionCount} بخش جدید از روی فایل تفکیک‌شده`,
+        "ok"
+      );
+      toast("ورود تفکیک‌شده انجام شد");
+      if (errors.length) setStatus(`برخی فایل‌ها خطا داشتند: ${errors.join("، ")}`, "error");
+    }
+
     function assignByRole(person) {
       const role = normalizeLabel(person.role || "");
       if (!role) return false;
@@ -3740,6 +4008,16 @@
       const files = [...(e.target.files || [])];
       e.target.value = "";
       handleFiles(files);
+    });
+
+    els.sortedImportBtn.addEventListener("click", () => {
+      els.sortedImportInput.click();
+    });
+    els.sortedImportInput.addEventListener("change", async (e) => {
+      const files = [...(e.target.files || [])];
+      e.target.value = "";
+      if (!files.length) return;
+      await handleSortedImportFiles(files);
     });
 
     els.undoBtn.addEventListener("click", undoLast);
