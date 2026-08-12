@@ -60,12 +60,10 @@
       font-weight: 700;
     }
 
-    .version-badge {
-      display: inline-block;
-      margin-top: 0.15rem;
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 500;
+    button.ghost.active-toggle {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: #9fc4b4;
     }
 
     header p {
@@ -743,7 +741,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۴ (ثابت)</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۵</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -754,6 +752,8 @@
 
     <div class="top-actions">
       <button type="button" class="ghost" id="undoBtn" disabled title="Ctrl+Z">بازگشت (Undo)</button>
+      <button type="button" class="ghost" id="toggleManualBtn" aria-expanded="false">افزودن دستی</button>
+      <button type="button" class="ghost" id="toggleDailyBtn" aria-expanded="false">گزارش روزانه</button>
       <button type="button" class="ghost" id="downloadBackupBtn">دانلود بک‌آپ</button>
       <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
       <button type="button" class="ghost" id="runCheckerBtn" disabled>چکر صحت ورود از فایل</button>
@@ -773,7 +773,7 @@
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
     <div class="accuracy-bar" id="accuracyBar">هنوز بررسی دقت انجام نشده است.</div>
 
-    <section class="panel manual-panel" id="manualPanel">
+    <section class="panel manual-panel" id="manualPanel" hidden>
       <h2>افزودن نفر دستی</h2>
       <div class="manual-grid">
         <label>نام و نام خانوادگی<input id="manualName" type="text" placeholder="مثلاً علی رضایی" /></label>
@@ -793,7 +793,7 @@
       </div>
     </section>
 
-    <section class="panel daily-panel">
+    <section class="panel daily-panel" id="dailyPanel" hidden>
       <div class="section-head">
         <h2>گزارش روزانه</h2>
         <span class="meta" id="dailyMeta">۰ نفر</span>
@@ -902,9 +902,9 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۴ قفل/ثابت شد. هر تغییر بعدی باید APP_VERSION را به ۵ (و بعدتر) افزایش دهد.
-    const APP_VERSION = 4;
-    const APP_VERSION_FROZEN = true;
+    // نسخه ۵: پنل‌های جمع‌شونده + اصلاح چینش بر اساس سمت
+    const APP_VERSION = 5;
+    const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
 
     const state = {
@@ -936,6 +936,8 @@
       copySummaryBtn: document.getElementById("copySummaryBtn"),
       clearSectionsBtn: document.getElementById("clearSectionsBtn"),
       undoBtn: document.getElementById("undoBtn"),
+      toggleManualBtn: document.getElementById("toggleManualBtn"),
+      toggleDailyBtn: document.getElementById("toggleDailyBtn"),
       downloadBackupBtn: document.getElementById("downloadBackupBtn"),
       restoreBackupBtn: document.getElementById("restoreBackupBtn"),
       backupInput: document.getElementById("backupInput"),
@@ -957,6 +959,7 @@
       clearSearchBtn: document.getElementById("clearSearchBtn"),
       runAccuracyBtn: document.getElementById("runAccuracyBtn"),
       accuracyBar: document.getElementById("accuracyBar"),
+      dailyPanel: document.getElementById("dailyPanel"),
       dailyMeta: document.getElementById("dailyMeta"),
       dailyDayInput: document.getElementById("dailyDayInput"),
       loadDailyBtn: document.getElementById("loadDailyBtn"),
@@ -966,6 +969,7 @@
       printDailyBtn: document.getElementById("printDailyBtn"),
       exportDailyWordBtn: document.getElementById("exportDailyWordBtn"),
       dailyBody: document.getElementById("dailyBody"),
+      manualPanel: document.getElementById("manualPanel"),
       manualName: document.getElementById("manualName"),
       manualRole: document.getElementById("manualRole"),
       manualBirth: document.getElementById("manualBirth"),
@@ -1828,6 +1832,31 @@
       return state.sections.find((s) => normalizeLabel(s.title) === normalized);
     }
 
+    function findSectionForRole(role) {
+      const clean = normalizeLabel(role);
+      if (!clean) return null;
+
+      const exact = findSectionByTitle(clean);
+      if (exact) return exact;
+
+      // Soft match: prefer longest section title contained in the role text
+      const contained = state.sections
+        .map((section) => ({ section, title: normalizeLabel(section.title) }))
+        .filter(({ title }) => title && (clean === title || clean.includes(title) || title.includes(clean)))
+        .sort((a, b) => b.title.length - a.title.length);
+
+      if (!contained.length) return null;
+      // If multiple same-length, require unique best match
+      const best = contained[0];
+      const ties = contained.filter((item) => item.title.length === best.title.length);
+      if (ties.length === 1) return best.section;
+      // Prefer exact containment of role in title or vice-versa with single unique winner
+      const strict = contained.filter(({ title }) => clean.includes(title));
+      if (strict.length === 1) return strict[0].section;
+      if (strict.length > 1) return strict.sort((a, b) => b.title.length - a.title.length)[0].section;
+      return best.section;
+    }
+
     function peopleInSection(sectionId) {
       const section = state.sections.find((s) => s.id === sectionId);
       const members = state.people.filter((p) => getSectionIds(p).includes(sectionId));
@@ -2192,7 +2221,7 @@
       els.peopleMeta.textContent = `${unassignedCount} باقیمانده / ${assignedCount} در بخش`;
       els.sectionsMeta.textContent = `${state.sections.length} بخش`;
 
-      els.autoAssignBtn.disabled = !(unassignedCount && hasSections);
+      els.autoAssignBtn.disabled = !unassignedCount;
       els.unassignAllBtn.disabled = !assignedCount;
       els.clearPeopleBtn.disabled = !hasPeople;
       els.sectionsFromRolesBtn.disabled = !hasPeople;
@@ -2267,7 +2296,7 @@
             <select class="assign-select" data-id="${escapeHtml(person.id)}" aria-label="انتخاب بخش برای ${escapeHtml(person.name)}">
               ${sectionOptions("", { emptyLabel: "— انتخاب بخش —" })}
             </select>
-            <button type="button" class="ghost small match-role" data-id="${escapeHtml(person.id)}" ${state.sections.length ? "" : "disabled"}>بر اساس سمت</button>
+            <button type="button" class="ghost small match-role" data-id="${escapeHtml(person.id)}" ${normalizeLabel(person.role) ? "" : "disabled"} title="${normalizeLabel(person.role) ? "ساختن/انتخاب بخش هم‌نام سمت" : "این فرد سمت ندارد"}">بر اساس سمت</button>
           </div>
         </article>
       `).join("");
@@ -2553,9 +2582,25 @@
     function assignByRole(person) {
       const role = normalizeLabel(person.role || "");
       if (!role) return false;
-      const section = findSectionByTitle(role);
+      const section = findSectionForRole(role);
       if (!section) return false;
-      return addPersonToSection(person, section.id) || getSectionIds(person).includes(section.id);
+      if (getSectionIds(person).includes(section.id)) return true;
+      return addPersonToSection(person, section.id);
+    }
+
+    function placePersonByRole(person) {
+      const role = normalizeLabel(person.role || "");
+      if (!role) return { ok: false, reason: "empty-role" };
+      let section = findSectionForRole(role);
+      let created = false;
+      if (!section) {
+        section = addSection(role, { silent: true });
+        created = true;
+      }
+      if (!section) return { ok: false, reason: "no-section" };
+      const already = getSectionIds(person).includes(section.id);
+      if (!already) addPersonToSection(person, section.id);
+      return { ok: true, section, created, already };
     }
 
     function personExportLines(person, index) {
@@ -3164,6 +3209,31 @@
 
     els.undoBtn.addEventListener("click", undoLast);
 
+    function setPanelOpen(panel, button, open) {
+      if (!panel || !button) return;
+      panel.hidden = !open;
+      button.setAttribute("aria-expanded", open ? "true" : "false");
+      button.classList.toggle("active-toggle", open);
+    }
+
+    els.toggleManualBtn.addEventListener("click", () => {
+      const open = els.manualPanel.hidden;
+      setPanelOpen(els.manualPanel, els.toggleManualBtn, open);
+      if (open) {
+        setPanelOpen(els.dailyPanel, els.toggleDailyBtn, false);
+        els.manualName.focus();
+      }
+    });
+
+    els.toggleDailyBtn.addEventListener("click", () => {
+      const open = els.dailyPanel.hidden;
+      setPanelOpen(els.dailyPanel, els.toggleDailyBtn, open);
+      if (open) {
+        setPanelOpen(els.manualPanel, els.toggleManualBtn, false);
+        renderDailyReport(getDailyPeople(), dailyLabel());
+      }
+    });
+
     els.addManualPersonBtn.addEventListener("click", () => {
       withChange("افزودن نفر دستی", () => {
         const person = createManualPerson();
@@ -3226,7 +3296,8 @@
         let n = 0;
         for (const person of state.people) {
           if (getSectionIds(person).length) continue;
-          if (assignByRole(person)) n += 1;
+          const result = placePersonByRole(person);
+          if (result.ok && !result.already) n += 1;
         }
         return n;
       });
@@ -3382,21 +3453,19 @@
     els.peopleList.addEventListener("click", (e) => {
       const btn = e.target.closest(".match-role");
       if (!btn) return;
+      if (btn.disabled) return;
       const person = state.people.find((p) => p.id === btn.dataset.id);
       if (!person) return;
       withChange("چینش بر اساس سمت", () => {
-        if (!assignByRole(person)) {
-          const role = normalizeLabel(person.role || "");
-          if (!role) {
-            toast("این فرد سمت ندارد");
-            return false;
-          }
-          const section = addSection(role, { silent: true });
-          addPersonToSection(person, section.id);
-          toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
-        } else {
-          toast("در بخش مربوط به سمت قرار گرفت");
+        const result = placePersonByRole(person);
+        if (!result.ok) {
+          toast(result.reason === "empty-role" ? "این فرد سمت ندارد" : "چینش بر اساس سمت ناموفق بود");
+          return false;
         }
+        if (result.created) toast(`بخش «${result.section.title}» ساخته و نفر داخلش قرار گرفت`);
+        else if (result.already) toast("از قبل در بخش مربوط به سمت بوده است");
+        else toast(`در بخش «${result.section.title}» قرار گرفت`);
+        return true;
       });
     });
 
