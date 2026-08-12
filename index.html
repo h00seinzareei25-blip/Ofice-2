@@ -291,8 +291,73 @@
       background: #f4f8f6;
     }
 
+    .manual-panel {
+      padding: 1rem;
+      margin: 0.9rem 0;
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .manual-panel h2 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.55rem;
+    }
+
+    .manual-grid label {
+      display: grid;
+      gap: 0.28rem;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .manual-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .day-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.55rem;
+    }
+
+    .day-chip {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 0.28rem 0.7rem;
+      font-size: 0.82rem;
+    }
+
+    .day-chip.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .order-actions {
+      display: flex;
+      gap: 0.3rem;
+      margin-bottom: 0.45rem;
+    }
+
+    @media (max-width: 900px) {
+      .manual-grid { grid-template-columns: 1fr 1fr; }
+    }
+
     @media (max-width: 700px) {
       .create-bar { grid-template-columns: 1fr; }
+      .manual-grid { grid-template-columns: 1fr; }
     }
 
     .bucket {
@@ -675,6 +740,7 @@
     </header>
 
     <div class="top-actions">
+      <button type="button" class="ghost" id="undoBtn" disabled title="Ctrl+Z">بازگشت (Undo)</button>
       <button type="button" class="ghost" id="downloadBackupBtn">دانلود بک‌آپ</button>
       <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
       <button type="button" class="ghost" id="runCheckerBtn" disabled>چکر صحت ورود از فایل</button>
@@ -694,19 +760,42 @@
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
     <div class="accuracy-bar" id="accuracyBar">هنوز بررسی دقت انجام نشده است.</div>
 
+    <section class="panel manual-panel" id="manualPanel">
+      <h2>افزودن نفر دستی</h2>
+      <div class="manual-grid">
+        <label>نام و نام خانوادگی<input id="manualName" type="text" placeholder="مثلاً علی رضایی" /></label>
+        <label>سمت<input id="manualRole" type="text" placeholder="اختیاری" /></label>
+        <label>تاریخ تولد<input id="manualBirth" type="text" placeholder="۱۳۷۰/۰۱/۰۱" /></label>
+        <label>کد ملی<input id="manualNational" type="text" placeholder="۱۰ رقمی" /></label>
+        <label>تلفن<input id="manualPhone" type="text" placeholder="09xxxxxxxxx" /></label>
+        <label>بخش اولیه
+          <select id="manualSection">
+            <option value="">— بدون بخش (باقیمانده) —</option>
+          </select>
+        </label>
+      </div>
+      <div class="manual-actions">
+        <button type="button" id="addManualPersonBtn">افزودن به لیست</button>
+        <span class="meta" id="manualHint">بدون فایل ورد هم می‌توانید نفر ثبت کنید</span>
+      </div>
+    </section>
+
     <section class="panel daily-panel">
       <div class="section-head">
         <h2>گزارش روزانه</h2>
         <span class="meta" id="dailyMeta">۰ نفر</span>
       </div>
       <div class="daily-controls">
-        <label>روز گزارش
+        <label>روز گزارش (شمسی)
           <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
         </label>
         <button type="button" id="loadDailyBtn">نمایش گزارش</button>
+        <button type="button" class="ghost" id="dailyTodayBtn">امروز</button>
+        <button type="button" class="ghost" id="dailyYesterdayBtn">دیروز</button>
         <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
         <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
       </div>
+      <div class="day-chips" id="dailyDayChips"></div>
       <div class="daily-body" id="dailyBody">
         <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
       </div>
@@ -800,7 +889,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    const APP_VERSION = 3;
+    const APP_VERSION = 4;
+    const UNDO_LIMIT = 40;
 
     const state = {
       people: [],
@@ -809,6 +899,8 @@
       lastSavedAt: null,
       lastCheck: null,
     };
+
+    const undoStack = [];
 
     const els = {
       dropzone: document.getElementById("dropzone"),
@@ -828,6 +920,7 @@
       exportWordBtn: document.getElementById("exportWordBtn"),
       copySummaryBtn: document.getElementById("copySummaryBtn"),
       clearSectionsBtn: document.getElementById("clearSectionsBtn"),
+      undoBtn: document.getElementById("undoBtn"),
       downloadBackupBtn: document.getElementById("downloadBackupBtn"),
       restoreBackupBtn: document.getElementById("restoreBackupBtn"),
       backupInput: document.getElementById("backupInput"),
@@ -852,9 +945,19 @@
       dailyMeta: document.getElementById("dailyMeta"),
       dailyDayInput: document.getElementById("dailyDayInput"),
       loadDailyBtn: document.getElementById("loadDailyBtn"),
+      dailyTodayBtn: document.getElementById("dailyTodayBtn"),
+      dailyYesterdayBtn: document.getElementById("dailyYesterdayBtn"),
+      dailyDayChips: document.getElementById("dailyDayChips"),
       printDailyBtn: document.getElementById("printDailyBtn"),
       exportDailyWordBtn: document.getElementById("exportDailyWordBtn"),
       dailyBody: document.getElementById("dailyBody"),
+      manualName: document.getElementById("manualName"),
+      manualRole: document.getElementById("manualRole"),
+      manualBirth: document.getElementById("manualBirth"),
+      manualNational: document.getElementById("manualNational"),
+      manualPhone: document.getElementById("manualPhone"),
+      manualSection: document.getElementById("manualSection"),
+      addManualPersonBtn: document.getElementById("addManualPersonBtn"),
       toast: document.getElementById("toast"),
     };
 
@@ -985,17 +1088,22 @@
 
     function parsePersonFromCells(cells, sourceFile, index) {
       const texts = cells.map(exactCellText);
+      if (texts.length < 6) return null;
       if (texts.every((t) => !t || t === "*")) return null;
 
+      // Layouts vary (9 vs 10+ cells because of merged org columns).
+      // Reliable mapping: phone/nationalId/birth at start, role/name/row at end.
       const phone = texts[0] || "";
       const nationalId = texts[1] || "";
       const birthDate = texts[2] || "";
-      const role = texts[7] || "";
-      const name = texts[8] || "";
-      const row = texts[9] || String(index + 1);
+      const role = texts[texts.length - 3] || "";
+      const name = texts[texts.length - 2] || "";
+      const row = texts[texts.length - 1] || String(index + 1);
 
       if (!name) return null;
-      if (isHeaderLabel(name) || isHeaderLabel(role)) return null;
+      if (isHeaderLabel(name) || isHeaderLabel(role) || isHeaderLabel(phone) || isHeaderLabel(nationalId)) return null;
+      // Sub-header rows like ویژه/خودرو/عادی
+      if (isHeaderLabel(texts[3]) || isHeaderLabel(texts[4])) return null;
 
       return {
         id: `${sourceFile}::${row}::${name}::${nationalId}::${phone}::${index}`,
@@ -1022,7 +1130,7 @@
         const rows = [...table.getElementsByTagNameNS(W_NS, "tr")];
         rows.forEach((tr, index) => {
           const cells = [...tr.children].filter((el) => el.localName === "tc");
-          if (cells.length < 9) return;
+          if (cells.length < 6) return;
           const person = parsePersonFromCells(cells, sourceFile, index);
           if (!person) return;
           const key = personKey(person);
@@ -1059,6 +1167,89 @@
       return String(value || "")
         .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d))
         .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
+    }
+
+    function toPersianDigits(value) {
+      return String(value || "").replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+    }
+
+    function gregorianToJalali(gy, gm, gd) {
+      const gdm = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+      let gy2 = gm > 2 ? gy + 1 : gy;
+      let days = 355666 + (365 * gy) + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100)
+        + Math.floor((gy2 + 399) / 400) + gd + gdm[gm - 1];
+      let jy = -1595 + (33 * Math.floor(days / 12053));
+      days %= 12053;
+      jy += 4 * Math.floor(days / 1461);
+      days %= 1461;
+      if (days > 365) {
+        jy += Math.floor((days - 1) / 365);
+        days = (days - 1) % 365;
+      }
+      const jm = days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+      const jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+      return { jy, jm, jd };
+    }
+
+    function jalaliToGregorian(jy, jm, jd) {
+      jy += 1595;
+      let days = -355668 + (365 * jy) + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4)
+        + jd + (jm < 7 ? (jm - 1) * 31 : ((jm - 7) * 30) + 186);
+      let gy = 400 * Math.floor(days / 146097);
+      days %= 146097;
+      if (days > 36524) {
+        gy += 100 * Math.floor(--days / 36524);
+        days %= 36524;
+        if (days >= 365) days += 1;
+      }
+      gy += 4 * Math.floor(days / 1461);
+      days %= 1461;
+      if (days > 365) {
+        gy += Math.floor((days - 1) / 365);
+        days = (days - 1) % 365;
+      }
+      let gd = days + 1;
+      const salA = ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 1 : 0;
+      const gdm = [0, 31, salA ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      let gm = 0;
+      for (gm = 1; gm <= 12 && gd > gdm[gm]; gm += 1) gd -= gdm[gm];
+      return { gy, gm, gd };
+    }
+
+    function formatJalaliParts(jy, jm, jd, { persian = true } = {}) {
+      const text = `${jy}/${String(jm).padStart(2, "0")}/${String(jd).padStart(2, "0")}`;
+      return persian ? toPersianDigits(text) : text;
+    }
+
+    function dateToJalaliLabel(date = new Date(), { persian = true } = {}) {
+      const { jy, jm, jd } = gregorianToJalali(date.getFullYear(), date.getMonth() + 1, date.getDate());
+      return formatJalaliParts(jy, jm, jd, { persian });
+    }
+
+    function isoToJalaliLabel(iso, { persian = true } = {}) {
+      if (!iso) return "";
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "";
+      return dateToJalaliLabel(date, { persian });
+    }
+
+    function parseJalaliDateText(value) {
+      const raw = toEnglishDigits(normalizeLabel(value)).replace(/[^\d/\-]/g, "");
+      if (!raw) return null;
+      const m = raw.match(/^(\d{3,4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (!m) return null;
+      const jy = Number(m[1]);
+      const jm = Number(m[2]);
+      const jd = Number(m[3]);
+      if (jy < 1200 || jm < 1 || jm > 12 || jd < 1 || jd > 31) return null;
+      return { jy, jm, jd };
+    }
+
+    function shiftJalaliDays(jy, jm, jd, delta) {
+      const g = jalaliToGregorian(jy, jm, jd);
+      const date = new Date(g.gy, g.gm - 1, g.gd);
+      date.setDate(date.getDate() + delta);
+      return gregorianToJalali(date.getFullYear(), date.getMonth() + 1, date.getDate());
     }
 
     function compactDigits(value) {
@@ -1192,10 +1383,9 @@
     function sameCalendarDay(iso, dayFilter) {
       if (!iso) return false;
       const filter = normalizeLabel(dayFilter);
+      const personDay = isoToJalaliLabel(iso, { persian: false });
       if (!filter) {
-        // today
-        const todayIso = new Date().toISOString().slice(0, 10);
-        return new Date(iso).toISOString().slice(0, 10) === todayIso;
+        return personDay === dateToJalaliLabel(new Date(), { persian: false });
       }
       return registeredDayMatches(iso, filter);
     }
@@ -1207,8 +1397,37 @@
     }
 
     function dailyLabel(dayFilter = els.dailyDayInput.value) {
+      const parsed = parseJalaliDateText(dayFilter);
+      if (parsed) return formatJalaliParts(parsed.jy, parsed.jm, parsed.jd, { persian: true });
       if (normalizeLabel(dayFilter)) return normalizeLabel(dayFilter);
-      return formatDateOnly(nowIso());
+      return dateToJalaliLabel(new Date(), { persian: true });
+    }
+
+    function collectRegisteredJalaliDays() {
+      const map = new Map();
+      for (const person of state.people) {
+        if (!person.registeredAt) continue;
+        const key = isoToJalaliLabel(person.registeredAt, { persian: false });
+        if (!key) continue;
+        const label = isoToJalaliLabel(person.registeredAt, { persian: true });
+        if (!map.has(key)) map.set(key, { key, label, count: 0 });
+        map.get(key).count += 1;
+      }
+      return [...map.values()].sort((a, b) => b.key.localeCompare(a.key));
+    }
+
+    function renderDailyDayChips(activeLabel = dailyLabel()) {
+      const days = collectRegisteredJalaliDays();
+      const activeKey = toEnglishDigits(activeLabel).replace(/[^\d/]/g, "");
+      if (!days.length) {
+        els.dailyDayChips.innerHTML = `<span class="meta">هنوز روز ثبت‌شده‌ای نیست</span>`;
+        return;
+      }
+      els.dailyDayChips.innerHTML = days.map((day) => `
+        <button type="button" class="day-chip ${day.key === activeKey ? "active" : ""}" data-day="${escapeHtml(day.label)}">
+          ${escapeHtml(day.label)} (${day.count})
+        </button>
+      `).join("");
     }
 
     function renderDailyReport(people = getDailyPeople(), label = dailyLabel()) {
@@ -1220,6 +1439,7 @@
 
       if (!people.length) {
         els.dailyBody.innerHTML = `<div class="empty">برای روز «${escapeHtml(label)}» ورودی‌ای ثبت نشده است.</div>`;
+        renderDailyDayChips(label);
         return;
       }
 
@@ -1317,6 +1537,7 @@
       }
 
       els.dailyBody.innerHTML = summary + groups.join("");
+      renderDailyDayChips(label);
     }
 
     function printDailyReport() {
@@ -1456,15 +1677,23 @@
       if (!iso) return false;
       const date = new Date(iso);
       if (Number.isNaN(date.getTime())) return false;
+
+      const personJalali = isoToJalaliLabel(iso, { persian: false });
+      const parsed = parseJalaliDateText(raw);
+      if (parsed) {
+        const filterKey = formatJalaliParts(parsed.jy, parsed.jm, parsed.jd, { persian: false });
+        return personJalali === filterKey;
+      }
+
       const isoDay = date.toISOString().slice(0, 10);
-      const faDay = date.toLocaleDateString("fa-IR");
+      const faDay = dateToJalaliLabel(date, { persian: true });
       const faDayLatin = toEnglishDigits(faDay).replace(/[^\d/]/g, "");
       const filterLatin = toEnglishDigits(raw).replace(/[^\d/\-]/g, "");
       return (
         includesText(isoDay, raw) ||
         includesText(faDay, raw) ||
         includesText(faDayLatin, filterLatin) ||
-        isoDay.includes(filterLatin) ||
+        personJalali.includes(filterLatin.replaceAll("-", "/")) ||
         faDayLatin.includes(filterLatin.replaceAll("-", "/"))
       );
     }
@@ -1586,7 +1815,57 @@
     }
 
     function peopleInSection(sectionId) {
-      return state.people.filter((p) => getSectionIds(p).includes(sectionId));
+      const section = state.sections.find((s) => s.id === sectionId);
+      const members = state.people.filter((p) => getSectionIds(p).includes(sectionId));
+      if (!section) return members;
+      ensureSectionOrder(section);
+      const known = new Set(members.map((p) => p.id));
+      section.memberOrder = section.memberOrder.filter((id) => known.has(id));
+      for (const person of members) {
+        if (!section.memberOrder.includes(person.id)) section.memberOrder.push(person.id);
+      }
+      const rank = new Map(section.memberOrder.map((id, index) => [id, index]));
+      return members.sort((a, b) => {
+        const ra = rank.has(a.id) ? rank.get(a.id) : 99999;
+        const rb = rank.has(b.id) ? rank.get(b.id) : 99999;
+        if (ra !== rb) return ra - rb;
+        return Number(a.row) - Number(b.row) || String(a.name).localeCompare(String(b.name), "fa");
+      });
+    }
+
+    function ensureSectionOrder(section) {
+      if (!section) return null;
+      if (!Array.isArray(section.memberOrder)) section.memberOrder = [];
+      return section;
+    }
+
+    function appendToSectionOrder(sectionId, personId) {
+      const section = state.sections.find((s) => s.id === sectionId);
+      if (!section || !personId) return;
+      ensureSectionOrder(section);
+      if (!section.memberOrder.includes(personId)) section.memberOrder.push(personId);
+    }
+
+    function removeFromSectionOrder(sectionId, personId) {
+      const section = state.sections.find((s) => s.id === sectionId);
+      if (!section || !personId) return;
+      ensureSectionOrder(section);
+      section.memberOrder = section.memberOrder.filter((id) => id !== personId);
+    }
+
+    function movePersonInSection(sectionId, personId, direction) {
+      const section = state.sections.find((s) => s.id === sectionId);
+      if (!section) return false;
+      peopleInSection(sectionId); // sync order
+      const idx = section.memberOrder.indexOf(personId);
+      const next = idx + direction;
+      if (idx < 0 || next < 0 || next >= section.memberOrder.length) return false;
+      const copy = section.memberOrder.slice();
+      const tmp = copy[idx];
+      copy[idx] = copy[next];
+      copy[next] = tmp;
+      section.memberOrder = copy;
+      return true;
     }
 
     function assignedPeople() {
@@ -1619,14 +1898,13 @@
     function formatDateTime(iso) {
       if (!iso) return "—";
       try {
-        return new Date(iso).toLocaleString("fa-IR", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return iso;
+        return `${dateToJalaliLabel(date)} ${date.toLocaleTimeString("fa-IR", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
-        });
+        })}`;
       } catch {
         return iso;
       }
@@ -1635,7 +1913,9 @@
     function formatDateOnly(iso) {
       if (!iso) return "—";
       try {
-        return new Date(iso).toLocaleDateString("fa-IR");
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return iso;
+        return dateToJalaliLabel(date);
       } catch {
         return iso;
       }
@@ -1647,6 +1927,8 @@
 
     function assignPerson(person, sectionId) {
       normalizePersonSections(person);
+      const previous = [...person.sectionIds];
+      previous.forEach((id) => removeFromSectionOrder(id, person.id));
       if (!sectionId) {
         person.sectionIds = [];
         person.assignedAt = null;
@@ -1654,6 +1936,7 @@
       }
       const already = person.sectionIds.includes(sectionId);
       person.sectionIds = [sectionId];
+      appendToSectionOrder(sectionId, person.id);
       if (!already) person.assignedAt = nowIso();
     }
 
@@ -1662,6 +1945,7 @@
       normalizePersonSections(person);
       if (person.sectionIds.includes(sectionId)) return false;
       person.sectionIds.push(sectionId);
+      appendToSectionOrder(sectionId, person.id);
       person.assignedAt = nowIso();
       return true;
     }
@@ -1669,10 +1953,15 @@
     function removePersonFromSection(person, sectionId) {
       normalizePersonSections(person);
       person.sectionIds = person.sectionIds.filter((id) => id !== sectionId);
+      removeFromSectionOrder(sectionId, person.id);
       if (!person.sectionIds.length) person.assignedAt = null;
     }
 
     function deletePerson(personId) {
+      const person = state.people.find((p) => p.id === personId);
+      if (person) {
+        getSectionIds(person).forEach((id) => removeFromSectionOrder(id, personId));
+      }
       state.people = state.people.filter((p) => p.id !== personId);
     }
 
@@ -1743,7 +2032,13 @@
         }
         return person;
       });
-      state.sections = payload.sections;
+      state.sections = (payload.sections || []).map((section) => ({
+        ...section,
+        memberOrder: Array.isArray(section.memberOrder) ? section.memberOrder.slice() : [],
+      }));
+      for (const section of state.sections) {
+        peopleInSection(section.id); // sync memberOrder with current members
+      }
       state.batches = (Array.isArray(payload.batches) ? payload.batches : []).map((batch) => {
         if (Array.isArray(batch.records) && batch.records.length) return batch;
         // migrate older backups that only stored keys
@@ -1778,9 +2073,100 @@
         : "بک‌آپ خودکار: هنوز ذخیره نشده";
     }
 
+    function snapshotState() {
+      return JSON.parse(JSON.stringify({
+        people: state.people,
+        sections: state.sections,
+        batches: state.batches,
+        lastCheck: state.lastCheck,
+      }));
+    }
+
+    function updateUndoBtn() {
+      const top = undoStack[undoStack.length - 1];
+      els.undoBtn.disabled = !undoStack.length;
+      els.undoBtn.title = top ? `بازگشت: ${top.label} (Ctrl+Z)` : "Ctrl+Z";
+      els.undoBtn.textContent = top ? `بازگشت: ${top.label}` : "بازگشت (Undo)";
+    }
+
+    function pushUndo(label) {
+      undoStack.push({ label: label || "آخرین تغییر", snap: snapshotState() });
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+      updateUndoBtn();
+    }
+
+    function clearUndoStack() {
+      undoStack.length = 0;
+      updateUndoBtn();
+    }
+
+    function undoLast() {
+      const entry = undoStack.pop();
+      updateUndoBtn();
+      if (!entry) {
+        toast("چیزی برای بازگشت نیست");
+        return;
+      }
+      state.people = entry.snap.people || [];
+      state.sections = entry.snap.sections || [];
+      state.batches = entry.snap.batches || [];
+      state.lastCheck = entry.snap.lastCheck || null;
+      commit();
+      toast(`برگشت انجام شد: ${entry.label}`);
+    }
+
     function commit(options = {}) {
       persistBackup(options);
       render();
+    }
+
+    function withChange(label, fn, options = {}) {
+      pushUndo(label || "آخرین تغییر");
+      let aborted = false;
+      const result = typeof fn === "function"
+        ? fn({ abort: () => { aborted = true; } })
+        : undefined;
+      if (aborted || result === false) {
+        undoStack.pop();
+        updateUndoBtn();
+        return result;
+      }
+      commit(options);
+      return result;
+    }
+
+    function createManualPerson() {
+      const name = normalizeLabel(els.manualName.value);
+      if (!name) {
+        toast("نام را وارد کنید");
+        return null;
+      }
+      const person = {
+        id: uid("manual"),
+        row: String(state.people.length + 1),
+        name,
+        role: normalizeLabel(els.manualRole.value),
+        birthDate: normalizeLabel(els.manualBirth.value),
+        nationalId: normalizeLabel(els.manualNational.value),
+        phone: normalizeLabel(els.manualPhone.value),
+        sourceFile: "ثبت دستی",
+        sectionIds: [],
+        registeredAt: nowIso(),
+        assignedAt: null,
+      };
+      const sectionId = els.manualSection.value || "";
+      if (sectionId) addPersonToSection(person, sectionId);
+      return person;
+    }
+
+    function refreshManualSectionOptions() {
+      const selected = els.manualSection.value;
+      els.manualSection.innerHTML = [
+        `<option value="">— بدون بخش (باقیمانده) —</option>`,
+        ...state.sections.map((s) =>
+          `<option value="${escapeHtml(s.id)}" ${s.id === selected ? "selected" : ""}>${escapeHtml(s.title)}</option>`
+        ),
+      ].join("");
     }
 
     function render() {
@@ -1802,6 +2188,8 @@
       els.runCheckerBtn.disabled = !hasPeople || !state.batches.length;
       els.recheckInputBtn.disabled = !hasPeople;
       els.runAccuracyBtn.disabled = !hasPeople;
+      updateUndoBtn();
+      refreshManualSectionOptions();
 
       renderPeople();
       renderSections();
@@ -1923,6 +2311,8 @@
                 emptyLabel: "— فقط خروج از این بخش —",
               });
               const titles = sectionTitlesForPerson(person);
+              const canUp = index > 0;
+              const canDown = index < members.length - 1;
               return `
               <tr data-person-id="${escapeHtml(person.id)}">
                 <td>${index + 1}</td>
@@ -1965,6 +2355,10 @@
                   ` : `
                     <div class="meta" style="margin-bottom:0.45rem;white-space:normal">فقط در این بخش</div>
                   `}
+                  <div class="order-actions">
+                    <button type="button" class="ghost small move-up" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canUp ? "" : "disabled"} title="بالاتر">▲</button>
+                    <button type="button" class="ghost small move-down" data-id="${escapeHtml(person.id)}" data-section-id="${escapeHtml(currentSectionId)}" ${canDown ? "" : "disabled"} title="پایین‌تر">▼</button>
+                  </div>
                   <div class="row-actions">
                     <button type="button" class="ghost small edit-person" data-id="${escapeHtml(person.id)}">ویرایش</button>
                     <button type="button" class="danger small delete-person" data-id="${escapeHtml(person.id)}">حذف</button>
@@ -2139,7 +2533,7 @@
         if (!silent) toast("این بخش از قبل وجود دارد");
         return existing;
       }
-      const section = { id: uid("sec"), title: clean };
+      const section = { id: uid("sec"), title: clean, memberOrder: [] };
       state.sections.push(section);
       return section;
     }
@@ -2652,6 +3046,7 @@
       const existingKeys = new Set(state.people.map(personKey));
       const addedPeople = [];
       const registeredAt = nowIso();
+      pushUndo("ورود فایل ورد");
       for (const person of extracted) {
         const key = personKey(person);
         if (existingKeys.has(key)) continue;
@@ -2711,6 +3106,7 @@
 
       const liveRecords = livePeople.map(snapshotRecord);
       const sourceNames = files.map((f) => f.name);
+      pushUndo("مقایسه دوباره با ورد");
       // Replace previous snapshots for the same source files so history stays accurate
       state.batches = state.batches.filter((batch) => {
         const batchFiles = batch.sourceFiles || [];
@@ -2754,11 +3150,37 @@
       handleFiles(files);
     });
 
+    els.undoBtn.addEventListener("click", undoLast);
+
+    els.addManualPersonBtn.addEventListener("click", () => {
+      withChange("افزودن نفر دستی", () => {
+        const person = createManualPerson();
+        if (!person) return false;
+        state.people.push(person);
+        els.manualName.value = "";
+        els.manualRole.value = "";
+        els.manualBirth.value = "";
+        els.manualNational.value = "";
+        els.manualPhone.value = "";
+        toast(`«${person.name}» اضافه شد`);
+        setStatus(`نفر دستی اضافه شد. مجموع: ${state.people.length}`, "ok");
+        return true;
+      });
+    });
+
     els.addSectionBtn.addEventListener("click", () => {
-      const section = addSection(els.sectionNameInput.value);
+      const title = els.sectionNameInput.value;
+      if (!normalizeLabel(title)) {
+        toast("نام بخش را وارد کنید");
+        return;
+      }
+      if (findSectionByTitle(title)) {
+        toast("این بخش از قبل وجود دارد");
+        return;
+      }
+      const section = withChange("افزودن بخش", () => addSection(title));
       if (!section) return;
       els.sectionNameInput.value = "";
-      commit();
       toast(`بخش «${section.title}» اضافه شد`);
     });
 
@@ -2775,45 +3197,52 @@
         toast("سمتی برای ساخت بخش پیدا نشد");
         return;
       }
-      let created = 0;
-      for (const role of roles) {
-        const before = state.sections.length;
-        addSection(role.title, { silent: true });
-        if (state.sections.length > before) created += 1;
-      }
-      commit();
+      const created = withChange("ساخت بخش از سمت‌ها", () => {
+        let count = 0;
+        for (const role of roles) {
+          const before = state.sections.length;
+          addSection(role.title, { silent: true });
+          if (state.sections.length > before) count += 1;
+        }
+        return count;
+      });
       toast(`${created} بخش از روی سمت‌ها ساخته شد`);
     });
 
     els.autoAssignBtn.addEventListener("click", () => {
-      let count = 0;
-      for (const person of state.people) {
-        if (getSectionIds(person).length) continue;
-        if (assignByRole(person)) count += 1;
-      }
-      commit();
+      const count = withChange("چینش خودکار", () => {
+        let n = 0;
+        for (const person of state.people) {
+          if (getSectionIds(person).length) continue;
+          if (assignByRole(person)) n += 1;
+        }
+        return n;
+      });
       toast(count ? `${count} نفر در بخش مربوط به سمت‌شان قرار گرفتند` : "مورد جدیدی برای چینش خودکار نبود");
     });
 
     els.unassignAllBtn.addEventListener("click", () => {
-      state.people.forEach((p) => assignPerson(p, UNASSIGNED));
-      commit();
+      withChange("خروج از همه بخش‌ها", () => {
+        state.people.forEach((p) => assignPerson(p, UNASSIGNED));
+      });
       toast("همه از بخش‌ها خارج شدند");
     });
 
     els.clearPeopleBtn.addEventListener("click", () => {
       if (!confirm("لیست افراد و تاریخچه ورودی‌ها پاک شود؟")) return;
-      state.people = [];
-      state.batches = [];
-      state.lastCheck = null;
-      commit();
+      withChange("پاک‌کردن لیست افراد", () => {
+        state.people = [];
+        state.batches = [];
+        state.lastCheck = null;
+      });
       setStatus("لیست افراد پاک شد.");
     });
 
     els.clearSectionsBtn.addEventListener("click", () => {
-      state.sections = [];
-      state.people.forEach((p) => assignPerson(p, UNASSIGNED));
-      commit();
+      withChange("حذف همه بخش‌ها", () => {
+        state.sections = [];
+        state.people.forEach((p) => assignPerson(p, UNASSIGNED));
+      });
       toast("همه بخش‌ها حذف شدند");
     });
 
@@ -2849,8 +3278,9 @@
       if (!file) return;
       try {
         const payload = JSON.parse(await file.text());
-        applyBackupPayload(payload);
-        commit();
+        withChange("بازیابی بک‌آپ", () => {
+          applyBackupPayload(payload);
+        });
         setStatus(`بک‌آپ بازیابی شد: ${state.people.length} نفر`, "ok");
         toast("بک‌آپ بازیابی شد");
       } catch (err) {
@@ -2880,6 +3310,26 @@
     els.loadDailyBtn.addEventListener("click", () => {
       renderDailyReport(getDailyPeople(), dailyLabel());
       toast(`${lastDailyPeople.length} نفر در گزارش روزانه`);
+    });
+
+    els.dailyTodayBtn.addEventListener("click", () => {
+      els.dailyDayInput.value = dateToJalaliLabel(new Date());
+      renderDailyReport(getDailyPeople(), dailyLabel());
+    });
+
+    els.dailyYesterdayBtn.addEventListener("click", () => {
+      const now = new Date();
+      const today = gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+      const y = shiftJalaliDays(today.jy, today.jm, today.jd, -1);
+      els.dailyDayInput.value = formatJalaliParts(y.jy, y.jm, y.jd, { persian: true });
+      renderDailyReport(getDailyPeople(), dailyLabel());
+    });
+
+    els.dailyDayChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".day-chip");
+      if (!chip) return;
+      els.dailyDayInput.value = chip.dataset.day || "";
+      renderDailyReport(getDailyPeople(), dailyLabel());
     });
 
     els.printDailyBtn.addEventListener("click", printDailyReport);
@@ -2912,8 +3362,9 @@
       if (!select) return;
       const person = state.people.find((p) => p.id === select.dataset.id);
       if (!person) return;
-      assignPerson(person, select.value || UNASSIGNED);
-      commit();
+      withChange("قرار دادن در بخش", () => {
+        assignPerson(person, select.value || UNASSIGNED);
+      });
     });
 
     els.peopleList.addEventListener("click", (e) => {
@@ -2921,19 +3372,20 @@
       if (!btn) return;
       const person = state.people.find((p) => p.id === btn.dataset.id);
       if (!person) return;
-      if (!assignByRole(person)) {
-        const role = normalizeLabel(person.role || "");
-        if (!role) {
-          toast("این فرد سمت ندارد");
-          return;
+      withChange("چینش بر اساس سمت", () => {
+        if (!assignByRole(person)) {
+          const role = normalizeLabel(person.role || "");
+          if (!role) {
+            toast("این فرد سمت ندارد");
+            return false;
+          }
+          const section = addSection(role, { silent: true });
+          addPersonToSection(person, section.id);
+          toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
+        } else {
+          toast("در بخش مربوط به سمت قرار گرفت");
         }
-        const section = addSection(role, { silent: true });
-        addPersonToSection(person, section.id);
-        toast(`بخش «${section.title}» ساخته و نفر داخلش قرار گرفت`);
-      } else {
-        toast("در بخش مربوط به سمت قرار گرفت");
-      }
-      commit();
+      });
     });
 
     els.sectionsList.addEventListener("click", (e) => {
@@ -2954,8 +3406,9 @@
           toast("بخش دیگری با این نام وجود دارد");
           return;
         }
-        section.title = clean;
-        commit();
+        withChange("تغییر نام بخش", () => {
+          section.title = clean;
+        });
         return;
       }
 
@@ -2963,10 +3416,11 @@
       if (deleteBtn) {
         e.stopPropagation();
         const sectionId = deleteBtn.dataset.sectionId;
-        state.sections = state.sections.filter((s) => s.id !== sectionId);
-        state.people.forEach((p) => removePersonFromSection(p, sectionId));
-        if (activeSectionId === sectionId) closeSectionModal();
-        commit();
+        withChange("حذف بخش", () => {
+          state.sections = state.sections.filter((s) => s.id !== sectionId);
+          state.people.forEach((p) => removePersonFromSection(p, sectionId));
+          if (activeSectionId === sectionId) closeSectionModal();
+        });
         return;
       }
 
@@ -2986,6 +3440,22 @@
     });
 
     els.sectionModalBody.addEventListener("click", (e) => {
+      const moveUp = e.target.closest(".move-up");
+      if (moveUp) {
+        withChange("جابه‌جایی ترتیب", () => {
+          movePersonInSection(moveUp.dataset.sectionId, moveUp.dataset.id, -1);
+        });
+        return;
+      }
+
+      const moveDown = e.target.closest(".move-down");
+      if (moveDown) {
+        withChange("جابه‌جایی ترتیب", () => {
+          movePersonInSection(moveDown.dataset.sectionId, moveDown.dataset.id, 1);
+        });
+        return;
+      }
+
       const editBtn = e.target.closest(".edit-person");
       if (editBtn) {
         const row = editBtn.closest("tr");
@@ -3011,12 +3481,13 @@
           toast("نام نمی‌تواند خالی باشد");
           return;
         }
-        person.name = nextName;
-        person.role = row.querySelector(".edit-role").value.trim();
-        person.birthDate = row.querySelector(".edit-birth").value.trim();
-        person.nationalId = row.querySelector(".edit-national").value.trim();
-        person.phone = row.querySelector(".edit-phone").value.trim();
-        commit();
+        withChange("ویرایش نفر", () => {
+          person.name = nextName;
+          person.role = row.querySelector(".edit-role").value.trim();
+          person.birthDate = row.querySelector(".edit-birth").value.trim();
+          person.nationalId = row.querySelector(".edit-national").value.trim();
+          person.phone = row.querySelector(".edit-phone").value.trim();
+        });
         toast("مشخصات ویرایش شد");
         return;
       }
@@ -3026,8 +3497,9 @@
         const person = state.people.find((p) => p.id === deleteBtn.dataset.id);
         if (!person) return;
         if (!confirm(`«${person.name}» از کل برنامه حذف شود؟`)) return;
-        deletePerson(person.id);
-        commit();
+        withChange("حذف نفر", () => {
+          deletePerson(person.id);
+        });
         toast("فرد حذف شد");
       }
     });
@@ -3039,9 +3511,10 @@
         if (!person) return;
         const fromSection = moveSelect.dataset.fromSection || activeSectionId;
         const nextSectionId = moveSelect.value || UNASSIGNED;
-        removePersonFromSection(person, fromSection);
-        if (nextSectionId) addPersonToSection(person, nextSectionId);
-        commit();
+        withChange("جابه‌جایی بین بخش‌ها", () => {
+          removePersonFromSection(person, fromSection);
+          if (nextSectionId) addPersonToSection(person, nextSectionId);
+        });
         if (!nextSectionId) toast("از این بخش خارج شد");
         else {
           const section = state.sections.find((s) => s.id === nextSectionId);
@@ -3054,8 +3527,7 @@
       if (addSelect) {
         const person = state.people.find((p) => p.id === addSelect.dataset.id);
         if (!person || !addSelect.value) return;
-        const added = addPersonToSection(person, addSelect.value);
-        commit();
+        const added = withChange("افزودن به بخش دیگر", () => addPersonToSection(person, addSelect.value));
         if (added) {
           const section = state.sections.find((s) => s.id === addSelect.value);
           toast(`به بخش «${section?.title || ""}» هم اضافه شد`);
@@ -3098,6 +3570,13 @@
       if (e.target === els.sectionModal) closeSectionModal();
     });
     document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === "z") {
+        const tag = (e.target && e.target.tagName) || "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        undoLast();
+        return;
+      }
       if (e.key === "Escape" && !els.sectionModal.hidden) closeSectionModal();
     });
 
@@ -3107,6 +3586,8 @@
       }
       setStatus(`بک‌آپ قبلی بازیابی شد: ${state.people.length} نفر`, "ok");
     }
+    els.dailyDayInput.placeholder = `خالی = امروز (${dateToJalaliLabel(new Date())})`;
+    updateUndoBtn();
     render();
   </script>
 </body>
