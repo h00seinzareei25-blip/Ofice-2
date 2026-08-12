@@ -519,6 +519,91 @@
       margin-top: 0.35rem;
     }
 
+    .chip.warn-chip {
+      background: #fff4e8;
+      color: var(--warn);
+    }
+
+    .chip.danger-chip {
+      background: #f8ecec;
+      color: var(--danger);
+    }
+
+    .accuracy-bar {
+      margin-top: 0.75rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      line-height: 1.7;
+      font-size: 0.92rem;
+    }
+
+    .accuracy-bar.ok {
+      border-color: #9fcbb5;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+
+    .accuracy-bar.warn {
+      border-color: #e0c49a;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .accuracy-bar.fail {
+      border-color: #e0b4b4;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .daily-panel {
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    .daily-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      align-items: end;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--line);
+      background: #f7faf8;
+    }
+
+    .daily-controls label {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-width: 180px;
+      flex: 1;
+    }
+
+    .daily-body {
+      padding: 0.85rem 1rem 1rem;
+      display: grid;
+      gap: 0.75rem;
+      max-height: 520px;
+      overflow: auto;
+    }
+
+    .daily-group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .daily-group h3 {
+      margin: 0;
+      padding: 0.65rem 0.8rem;
+      background: #eef5f1;
+      font-size: 0.95rem;
+      border-bottom: 1px solid var(--line);
+    }
+
     .checker {
       margin-top: 1rem;
       overflow: hidden;
@@ -596,6 +681,7 @@
       <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
       <button type="button" class="ghost" id="runCheckerBtn" disabled>چکر صحت ورود از فایل</button>
       <button type="button" class="ghost" id="recheckInputBtn" disabled>مقایسه دوباره با فایل ورد</button>
+      <button type="button" class="ghost" id="runAccuracyBtn" disabled>بررسی دقت کدملی/تلفن</button>
       <input id="backupInput" type="file" accept="application/json,.json" hidden />
       <input id="recheckInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
     </div>
@@ -608,6 +694,25 @@
     </label>
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
+    <div class="accuracy-bar" id="accuracyBar">هنوز بررسی دقت انجام نشده است.</div>
+
+    <section class="panel daily-panel">
+      <div class="section-head">
+        <h2>گزارش روزانه</h2>
+        <span class="meta" id="dailyMeta">۰ نفر</span>
+      </div>
+      <div class="daily-controls">
+        <label>روز گزارش
+          <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
+        </label>
+        <button type="button" id="loadDailyBtn">نمایش گزارش</button>
+        <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
+        <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
+      </div>
+      <div class="daily-body" id="dailyBody">
+        <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
+      </div>
+    </section>
 
     <section class="panel search-panel">
       <div class="section-head">
@@ -696,8 +801,8 @@
     </section>
 
     <p class="panel preview-note">
-      چکر بررسی می‌کند همه افراد فایل ورودی وارد برنامه شده‌اند و نام، تاریخ تولد، کد ملی و تلفن‌شان دقیقاً مثل فایل ورودی است.
-      خروجی Word برای هر دسته یک تیتر و جدول دارد. هر نفر می‌تواند هم‌زمان در چند بخش باشد؛ از داخل لیست بخش می‌توانید ویرایش، حذف، جابه‌جایی یا افزودن به بخش دیگر را انجام دهید.
+      گزارش روزانه ورودی‌های همان روز را نشان می‌دهد. چکر و بررسی دقت کمک می‌کنند کسی از قلم نیفتد و کد ملی/تلفن درست باشد.
+      خروجی Word برای هر دسته جدول دارد و فیلد سمت در خروجی نیست.
     </p>
   </div>
 
@@ -777,11 +882,22 @@
       searchResults: document.getElementById("searchResults"),
       runSearchBtn: document.getElementById("runSearchBtn"),
       clearSearchBtn: document.getElementById("clearSearchBtn"),
+      runAccuracyBtn: document.getElementById("runAccuracyBtn"),
+      accuracyBar: document.getElementById("accuracyBar"),
+      dailyMeta: document.getElementById("dailyMeta"),
+      dailyDayInput: document.getElementById("dailyDayInput"),
+      loadDailyBtn: document.getElementById("loadDailyBtn"),
+      printDailyBtn: document.getElementById("printDailyBtn"),
+      exportDailyWordBtn: document.getElementById("exportDailyWordBtn"),
+      dailyBody: document.getElementById("dailyBody"),
       toast: document.getElementById("toast"),
     };
 
     let activeSectionId = null;
     let lastSearchActive = false;
+    let lastDailyPeople = [];
+    let lastDailyLabel = "";
+    let lastAccuracy = null;
 
     function toast(message) {
       els.toast.textContent = message;
@@ -982,6 +1098,379 @@
 
     function compactDigits(value) {
       return toEnglishDigits(value).replace(/\D/g, "");
+    }
+
+    function isValidIranNationalId(value) {
+      const code = compactDigits(value);
+      if (!/^\d{10}$/.test(code)) return false;
+      if (/^(\d)\1{9}$/.test(code)) return false;
+      let sum = 0;
+      for (let i = 0; i < 9; i += 1) sum += Number(code[i]) * (10 - i);
+      const rem = sum % 11;
+      const check = Number(code[9]);
+      return rem < 2 ? check === rem : check === 11 - rem;
+    }
+
+    function isValidIranMobile(value) {
+      const phone = compactDigits(value);
+      return /^09\d{9}$/.test(phone);
+    }
+
+    function isValidBirthDate(value) {
+      const text = toEnglishDigits(normalizeLabel(value));
+      if (!text) return false;
+      return /^\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(text);
+    }
+
+    function validatePersonFields(person) {
+      const issues = [];
+      if (!normalizeLabel(person.name)) issues.push("نام خالی است");
+      if (!normalizeLabel(person.nationalId)) issues.push("کد ملی خالی است");
+      else if (!isValidIranNationalId(person.nationalId)) issues.push("کد ملی نامعتبر است");
+      if (!normalizeLabel(person.phone)) issues.push("تلفن خالی است");
+      else if (!isValidIranMobile(person.phone)) issues.push("شماره موبایل نامعتبر است");
+      if (!normalizeLabel(person.birthDate)) issues.push("تاریخ تولد خالی است");
+      else if (!isValidBirthDate(person.birthDate)) issues.push("فرمت تاریخ تولد نامعتبر است");
+      return issues;
+    }
+
+    function findDuplicateGroups() {
+      const byNational = new Map();
+      const byPhone = new Map();
+      for (const person of state.people) {
+        const nid = compactDigits(person.nationalId);
+        const phone = compactDigits(person.phone);
+        if (nid.length === 10) {
+          if (!byNational.has(nid)) byNational.set(nid, []);
+          byNational.get(nid).push(person);
+        }
+        if (phone.length >= 10) {
+          if (!byPhone.has(phone)) byPhone.set(phone, []);
+          byPhone.get(phone).push(person);
+        }
+      }
+      const nationalDuplicates = [...byNational.values()].filter((g) => g.length > 1);
+      const phoneDuplicates = [...byPhone.values()].filter((g) => g.length > 1);
+      return { nationalDuplicates, phoneDuplicates };
+    }
+
+    function runAccuracyAudit({ includeUnassigned = true } = {}) {
+      const fieldIssues = [];
+      for (const person of state.people) {
+        const issues = validatePersonFields(person);
+        if (issues.length) {
+          fieldIssues.push({
+            id: person.id,
+            name: person.name,
+            issues,
+            nationalId: person.nationalId,
+            phone: person.phone,
+          });
+        }
+      }
+
+      const unassigned = includeUnassigned
+        ? state.people.filter((p) => getSectionIds(p).length === 0).map((p) => ({
+            id: p.id,
+            name: p.name,
+            sourceFile: p.sourceFile,
+          }))
+        : [];
+
+      const { nationalDuplicates, phoneDuplicates } = findDuplicateGroups();
+      const ok = fieldIssues.length === 0 && unassigned.length === 0
+        && nationalDuplicates.length === 0 && phoneDuplicates.length === 0;
+
+      lastAccuracy = {
+        at: nowIso(),
+        ok,
+        fieldIssues,
+        unassigned,
+        nationalDuplicates: nationalDuplicates.map((g) => g.map((p) => p.name)),
+        phoneDuplicates: phoneDuplicates.map((g) => g.map((p) => p.name)),
+        total: state.people.length,
+      };
+      renderAccuracyBar(lastAccuracy);
+      return lastAccuracy;
+    }
+
+    function renderAccuracyBar(result) {
+      if (!result) {
+        els.accuracyBar.className = "accuracy-bar";
+        els.accuracyBar.textContent = "هنوز بررسی دقت انجام نشده است.";
+        return;
+      }
+      if (result.ok) {
+        els.accuracyBar.className = "accuracy-bar ok";
+        els.accuracyBar.textContent = `دقت تأیید شد: ${result.total} نفر بدون مشکل کد ملی/تلفن/تاریخ و بدون فرد باقیمانده یا تکراری.`;
+        return;
+      }
+      const bits = [];
+      if (result.fieldIssues.length) bits.push(`${result.fieldIssues.length} نفر داده نامعتبر/ناقص`);
+      if (result.unassigned.length) bits.push(`${result.unassigned.length} نفر هنوز در بخشی نیستند`);
+      if (result.nationalDuplicates.length) bits.push(`${result.nationalDuplicates.length} گروه کدملی تکراری`);
+      if (result.phoneDuplicates.length) bits.push(`${result.phoneDuplicates.length} گروه تلفن تکراری`);
+      const onlyUnassigned = result.unassigned.length
+        && !result.fieldIssues.length
+        && !result.nationalDuplicates.length
+        && !result.phoneDuplicates.length;
+      els.accuracyBar.className = `accuracy-bar ${onlyUnassigned ? "warn" : "fail"}`;
+      els.accuracyBar.textContent = `هشدار دقت: ${bits.join("، ")}. جزئیات را در چکر ببینید.`;
+    }
+
+    function personAccuracyChips(person) {
+      const issues = validatePersonFields(person);
+      if (!issues.length) return "";
+      return issues.map((issue) => `<span class="chip danger-chip">${escapeHtml(issue)}</span>`).join("");
+    }
+
+    function sameCalendarDay(iso, dayFilter) {
+      if (!iso) return false;
+      const filter = normalizeLabel(dayFilter);
+      if (!filter) {
+        // today
+        const todayIso = new Date().toISOString().slice(0, 10);
+        return new Date(iso).toISOString().slice(0, 10) === todayIso;
+      }
+      return registeredDayMatches(iso, filter);
+    }
+
+    function getDailyPeople(dayFilter = els.dailyDayInput.value) {
+      return state.people
+        .filter((p) => sameCalendarDay(p.registeredAt, dayFilter))
+        .sort((a, b) => String(a.registeredAt || "").localeCompare(String(b.registeredAt || "")));
+    }
+
+    function dailyLabel(dayFilter = els.dailyDayInput.value) {
+      if (normalizeLabel(dayFilter)) return normalizeLabel(dayFilter);
+      return formatDateOnly(nowIso());
+    }
+
+    function renderDailyReport(people = getDailyPeople(), label = dailyLabel()) {
+      lastDailyPeople = people;
+      lastDailyLabel = label;
+      els.dailyMeta.textContent = `${people.length} نفر`;
+      els.printDailyBtn.disabled = !people.length;
+      els.exportDailyWordBtn.disabled = !people.length;
+
+      if (!people.length) {
+        els.dailyBody.innerHTML = `<div class="empty">برای روز «${escapeHtml(label)}» ورودی‌ای ثبت نشده است.</div>`;
+        return;
+      }
+
+      const unassigned = people.filter((p) => getSectionIds(p).length === 0);
+      const bySection = new Map();
+      for (const section of state.sections) bySection.set(section.id, []);
+      for (const person of people) {
+        const ids = getSectionIds(person);
+        if (!ids.length) continue;
+        for (const id of ids) {
+          if (!bySection.has(id)) bySection.set(id, []);
+          bySection.get(id).push(person);
+        }
+      }
+
+      const accuracyIssues = people.filter((p) => validatePersonFields(p).length);
+      const summary = `
+        <div class="accuracy-bar ${accuracyIssues.length || unassigned.length ? "warn" : "ok"}">
+          گزارش روز ${escapeHtml(label)}: ${people.length} نفر
+          ${unassigned.length ? ` | ${unassigned.length} نفر بدون بخش` : ""}
+          ${accuracyIssues.length ? ` | ${accuracyIssues.length} نفر با مشکل دقت` : " | بدون مشکل دقت در فیلدها"}
+        </div>`;
+
+      const groups = [];
+      for (const section of state.sections) {
+        const members = bySection.get(section.id) || [];
+        if (!members.length) continue;
+        groups.push(`
+          <article class="daily-group">
+            <h3>${escapeHtml(section.title)} (${members.length})</h3>
+            <table class="modal-table">
+              <thead>
+                <tr>
+                  <th>ردیف</th>
+                  <th>نام</th>
+                  <th>ساعت ثبت</th>
+                  <th>تاریخ تولد</th>
+                  <th>کد ملی</th>
+                  <th>تلفن</th>
+                  <th>دقت</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${members.map((person, index) => {
+                  const issues = validatePersonFields(person);
+                  return `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td class="name">${escapeHtml(person.name)}</td>
+                      <td>${escapeHtml(formatDateTime(person.registeredAt))}</td>
+                      <td>${escapeHtml(person.birthDate || "—")}</td>
+                      <td>${escapeHtml(person.nationalId || "—")}</td>
+                      <td>${escapeHtml(person.phone || "—")}</td>
+                      <td>${issues.length ? escapeHtml(issues.join("، ")) : "سالم"}</td>
+                    </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </article>
+        `);
+      }
+
+      if (unassigned.length) {
+        groups.push(`
+          <article class="daily-group">
+            <h3>بدون بخش (${unassigned.length})</h3>
+            <table class="modal-table">
+              <thead>
+                <tr>
+                  <th>ردیف</th>
+                  <th>نام</th>
+                  <th>ساعت ثبت</th>
+                  <th>کد ملی</th>
+                  <th>تلفن</th>
+                  <th>دقت</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${unassigned.map((person, index) => {
+                  const issues = validatePersonFields(person);
+                  return `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td class="name">${escapeHtml(person.name)}</td>
+                      <td>${escapeHtml(formatDateTime(person.registeredAt))}</td>
+                      <td>${escapeHtml(person.nationalId || "—")}</td>
+                      <td>${escapeHtml(person.phone || "—")}</td>
+                      <td>${issues.length ? escapeHtml(issues.join("، ")) : "سالم"}</td>
+                    </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </article>
+        `);
+      }
+
+      els.dailyBody.innerHTML = summary + groups.join("");
+    }
+
+    function printDailyReport() {
+      if (!lastDailyPeople.length) {
+        toast("گزارشی برای پرینت نیست");
+        return;
+      }
+      const html = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>گزارش روزانه ${escapeHtml(lastDailyLabel)}</title>
+  <style>
+    body { font-family: Tahoma, sans-serif; padding: 24px; color: #1a2420; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    h2 { font-size: 16px; margin: 18px 0 8px; }
+    p { margin: 0 0 12px; color: #5c6b64; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+    th, td { border: 1px solid #9db5a8; padding: 8px; text-align: right; font-size: 13px; }
+    th { background: #eef5f1; }
+  </style>
+</head>
+<body>
+  <h1>گزارش روزانه مهمانان</h1>
+  <p>روز: ${escapeHtml(lastDailyLabel)} | تعداد: ${lastDailyPeople.length} نفر</p>
+  ${els.dailyBody.innerHTML
+    .replace(/class="accuracy-bar[^"]*"/g, "")
+    .replace(/class="daily-group"/g, "")
+    .replace(/class="modal-table"/g, "")
+    .replace(/class="name"/g, "")}
+</body>
+</html>`;
+      const win = window.open("", "_blank", "width=900,height=700");
+      if (!win) {
+        toast("پنجره پرینت مسدود شد");
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 250);
+    }
+
+    async function exportDailyWord() {
+      if (!lastDailyPeople.length) {
+        toast("گزارشی برای خروجی نیست");
+        return;
+      }
+      const bodyParts = [];
+      bodyParts.push(wordParagraph("گزارش روزانه مهمانان", { bold: true, size: 32, align: "center", spaceAfter: 120 }));
+      bodyParts.push(wordParagraph(`روز: ${lastDailyLabel} | تعداد: ${lastDailyPeople.length} نفر`, {
+        size: 20,
+        align: "center",
+        spaceAfter: 240,
+      }));
+
+      const grouped = new Map();
+      for (const person of lastDailyPeople) {
+        const ids = getSectionIds(person);
+        if (!ids.length) {
+          if (!grouped.has("__none__")) grouped.set("__none__", []);
+          grouped.get("__none__").push(person);
+          continue;
+        }
+        for (const id of ids) {
+          if (!grouped.has(id)) grouped.set(id, []);
+          grouped.get(id).push(person);
+        }
+      }
+
+      for (const section of state.sections) {
+        const members = grouped.get(section.id) || [];
+        if (!members.length) continue;
+        bodyParts.push(wordParagraph(section.title, { bold: true, size: 26, spaceBefore: 120, spaceAfter: 100 }));
+        bodyParts.push(wordPeopleTable(members));
+      }
+      const none = grouped.get("__none__") || [];
+      if (none.length) {
+        bodyParts.push(wordParagraph("بدون بخش", { bold: true, size: 26, spaceBefore: 120, spaceAfter: 100 }));
+        bodyParts.push(wordPeopleTable(none));
+      }
+
+      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${bodyParts.join("\n")}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1008" w:right="1008" w:bottom="1008" w:left="1008"/>
+      <w:bidi/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+      const zip = new JSZip();
+      zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+      zip.folder("_rels").file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+      const word = zip.folder("word");
+      word.file("document.xml", documentXml);
+      word.folder("_rels").file("document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`);
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `گزارش-روزانه-${lastDailyLabel.replaceAll("/", "-")}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("خروجی Word گزارش روزانه ذخیره شد");
     }
 
     function includesText(haystack, needle) {
@@ -1382,6 +1871,7 @@
       els.clearSectionsBtn.disabled = !hasSections;
       els.runCheckerBtn.disabled = !hasPeople || !state.batches.length;
       els.recheckInputBtn.disabled = !hasPeople;
+      els.runAccuracyBtn.disabled = !hasPeople;
 
       renderPeople();
       renderSections();
@@ -1390,6 +1880,9 @@
       else {
         els.searchMeta.textContent = "۰ نتیجه";
       }
+      renderDailyReport(getDailyPeople(), dailyLabel());
+      if (hasPeople) runAccuracyAudit({ includeUnassigned: true });
+      else renderAccuracyBar(null);
       renderChecker(state.lastCheck);
       updateBackupMeta();
 
@@ -1435,6 +1928,7 @@
                 ${person.nationalId ? `<span class="chip">${escapeHtml(person.nationalId)}</span>` : ""}
                 ${person.birthDate ? `<span class="chip">${escapeHtml(person.birthDate)}</span>` : ""}
                 ${person.sourceFile ? `<span class="chip">${escapeHtml(person.sourceFile)}</span>` : ""}
+                ${personAccuracyChips(person)}
               </div>
             </div>
           </div>
@@ -1511,6 +2005,7 @@
                       <span class="chip">${escapeHtml(person.birthDate || "—")}</span>
                       <span class="chip">${escapeHtml(person.nationalId || "—")}</span>
                       <span class="chip">${escapeHtml(person.phone || "—")}</span>
+                      ${personAccuracyChips(person)}
                     </div>
                     ${titles.length > 1 ? `<div class="meta" style="margin-top:0.35rem;white-space:normal">بخش‌ها: ${escapeHtml(titles.join("، "))}</div>` : ""}
                   </div>
@@ -1886,9 +2381,15 @@
         };
       });
 
+      const accuracy = runAccuracyAudit({ includeUnassigned: true });
+
       const ok = missingFromProgram.length === 0
         && alteredInProgram.length === 0
-        && (!exportedSet || missingFromExport.length === 0);
+        && (!exportedSet || missingFromExport.length === 0)
+        && accuracy.fieldIssues.length === 0
+        && accuracy.nationalDuplicates.length === 0
+        && accuracy.phoneDuplicates.length === 0
+        && (!exportedSet || accuracy.unassigned.length === 0);
 
       const result = {
         at: new Date().toISOString(),
@@ -1900,6 +2401,10 @@
         missingFromProgram,
         alteredInProgram,
         missingFromExport,
+        fieldIssues: accuracy.fieldIssues,
+        unassigned: accuracy.unassigned,
+        nationalDuplicates: accuracy.nationalDuplicates,
+        phoneDuplicates: accuracy.phoneDuplicates,
         byBatch,
         usedLiveFile: Boolean(liveRecords && liveRecords.length),
         ok,
@@ -1961,21 +2466,49 @@
           }</ul></div>`
         : "";
 
+      const fieldIssueList = (result.fieldIssues || []).length
+        ? `<div class="checker-block"><h3>اشکال دقت فیلدها (${result.fieldIssues.length})</h3><ul>${
+            result.fieldIssues.map((p) =>
+              `<li><strong>${escapeHtml(p.name)}</strong> — ${escapeHtml(p.issues.join("، "))} | کد ملی: ${escapeHtml(p.nationalId || "—")} | تلفن: ${escapeHtml(p.phone || "—")}</li>`
+            ).join("")
+          }</ul></div>`
+        : "";
+
+      const unassignedList = (result.unassigned || []).length
+        ? `<div class="checker-block"><h3>هنوز در بخشی قرار نگرفته‌اند (${result.unassigned.length})</h3><ul>${
+            result.unassigned.map((p) =>
+              `<li><strong>${escapeHtml(p.name)}</strong>${p.sourceFile ? ` | ${escapeHtml(p.sourceFile)}` : ""}</li>`
+            ).join("")
+          }</ul></div>`
+        : "";
+
+      const duplicateList = ((result.nationalDuplicates || []).length || (result.phoneDuplicates || []).length)
+        ? `<div class="checker-block"><h3>تکراری‌ها</h3><ul>${
+            [
+              ...(result.nationalDuplicates || []).map((names) => `<li>کد ملی تکراری: ${escapeHtml(names.join("، "))}</li>`),
+              ...(result.phoneDuplicates || []).map((names) => `<li>تلفن تکراری: ${escapeHtml(names.join("، "))}</li>`),
+            ].join("")
+          }</ul></div>`
+        : "";
+
       let summary;
       if (!result.inputCount) {
         summary = "هنوز اسنپ‌شات ورودی برای مقایسه وجود ندارد. یک فایل ورد بارگذاری کنید یا با «مقایسه دوباره با فایل ورد» فایل را دوباره بدهید.";
         els.checkerPanel.className = "panel checker warn";
       } else if (result.ok) {
         summary = result.exportedCount !== null
-          ? `صحت ورود تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر فایل ورودی درست در برنامه‌اند و همه در خروجی هستند.`
-          : `صحت ورود تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر فایل ورودی با اطلاعات دقیق در برنامه‌اند.` +
+          ? `صحت و دقت تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر درست وارد شده‌اند، فیلدها معتبرند و همه در خروجی هستند.`
+          : `صحت و دقت تأیید شد. ${result.matchedCount} از ${result.inputCount} نفر درست وارد شده‌اند و کدملی/تلفن/تاریخ معتبر است.` +
             (result.usedLiveFile ? " (مقایسه زنده با فایل ورد)" : "");
       } else {
         const bits = [];
         if (result.missingFromProgram.length) bits.push(`${result.missingFromProgram.length} نفر از ورود جا مانده‌اند`);
         if (result.alteredInProgram.length) bits.push(`${result.alteredInProgram.length} نفر اطلاعات اشتباه دارند`);
         if (result.missingFromExport.length) bits.push(`${result.missingFromExport.length} نفر در خروجی نیستند`);
-        summary = `اشکال در صحت ورود/خروجی: ${bits.join("، ")}.`;
+        if ((result.fieldIssues || []).length) bits.push(`${result.fieldIssues.length} نفر فیلد نامعتبر دارند`);
+        if ((result.unassigned || []).length) bits.push(`${result.unassigned.length} نفر بدون بخش‌اند`);
+        if ((result.nationalDuplicates || []).length || (result.phoneDuplicates || []).length) bits.push("تکراری وجود دارد");
+        summary = `اشکال در صحت/دقت: ${bits.join("، ")}.`;
       }
 
       els.checkerBody.innerHTML = `
@@ -1983,11 +2516,22 @@
         ${missingProgramList}
         ${alteredList}
         ${missingExportList}
+        ${fieldIssueList}
+        ${unassignedList}
+        ${duplicateList}
         ${batchList}
       `;
     }
 
     async function exportWord() {
+      const preAudit = runAccuracyAudit({ includeUnassigned: true });
+      if (!preAudit.ok) {
+        const proceed = confirm(
+          `هشدار دقت: ${preAudit.fieldIssues.length} مشکل فیلد، ${preAudit.unassigned.length} نفر بدون بخش، و تکراری‌های احتمالی وجود دارد.\nباز هم خروجی گرفته شود؟`
+        );
+        if (!proceed) return;
+      }
+
       const bodyParts = [];
       const exported = [];
       bodyParts.push(wordParagraph("لیست تفکیک‌شده مهمانان", {
@@ -2328,6 +2872,34 @@
       renderChecker(check);
       render();
       toast(check.ok ? "چکر ورود: کامل است" : "چکر ورود: مغایرت دارد");
+    });
+
+    els.runAccuracyBtn.addEventListener("click", () => {
+      const audit = runAccuracyAudit({ includeUnassigned: true });
+      const check = runCompletenessCheck({ source: "accuracy" });
+      persistBackup();
+      renderChecker(check);
+      render();
+      toast(audit.ok ? "دقت فیلدها تأیید شد" : "مشکل دقت پیدا شد");
+    });
+
+    els.loadDailyBtn.addEventListener("click", () => {
+      renderDailyReport(getDailyPeople(), dailyLabel());
+      toast(`${lastDailyPeople.length} نفر در گزارش روزانه`);
+    });
+
+    els.printDailyBtn.addEventListener("click", printDailyReport);
+    els.exportDailyWordBtn.addEventListener("click", () => {
+      exportDailyWord().catch((err) => {
+        console.error(err);
+        toast("خروجی گزارش روزانه ناموفق بود");
+      });
+    });
+    els.dailyDayInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        els.loadDailyBtn.click();
+      }
     });
 
     els.recheckInputBtn.addEventListener("click", () => {
