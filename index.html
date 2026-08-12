@@ -60,12 +60,6 @@
       font-weight: 700;
     }
 
-    button.ghost.active-toggle {
-      background: var(--accent-soft);
-      color: var(--accent);
-      border-color: #9fc4b4;
-    }
-
     header p {
       margin: 0;
       color: var(--muted);
@@ -298,15 +292,70 @@
     }
 
     .manual-panel {
-      padding: 1rem;
       margin: 0.9rem 0;
-      display: grid;
-      gap: 0.75rem;
+      overflow: hidden;
     }
 
     .manual-panel h2 {
       margin: 0;
       font-size: 1.05rem;
+    }
+
+    .drawer-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border: 0;
+      border-radius: 0;
+      background: #f4f8f6;
+      color: var(--ink);
+      text-align: right;
+      cursor: pointer;
+    }
+
+    .drawer-toggle:hover {
+      background: #eef5f1;
+    }
+
+    .drawer-toggle .drawer-title {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      min-width: 0;
+      font-weight: 600;
+    }
+
+    .drawer-toggle .drawer-chevron {
+      flex-shrink: 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      transition: transform 0.2s ease;
+    }
+
+    .drawer-panel.is-open > .drawer-toggle .drawer-chevron {
+      transform: rotate(180deg);
+    }
+
+    .drawer-body {
+      display: none;
+      padding: 0.9rem 1rem 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .drawer-panel.is-open > .drawer-body {
+      display: block;
+    }
+
+    .manual-panel .drawer-body {
+      display: none;
+    }
+
+    .manual-panel.is-open .drawer-body.manual-body {
+      display: grid;
+      gap: 0.75rem;
     }
 
     .manual-grid {
@@ -639,9 +688,10 @@
       flex-wrap: wrap;
       gap: 0.45rem;
       align-items: end;
-      padding: 0.85rem 1rem;
+      padding: 0 0 0.75rem;
+      margin-bottom: 0.35rem;
       border-bottom: 1px solid var(--line);
-      background: #f7faf8;
+      background: transparent;
     }
 
     .daily-controls label {
@@ -741,7 +791,7 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۵</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۶</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -752,8 +802,6 @@
 
     <div class="top-actions">
       <button type="button" class="ghost" id="undoBtn" disabled title="Ctrl+Z">بازگشت (Undo)</button>
-      <button type="button" class="ghost" id="toggleManualBtn" aria-expanded="false">افزودن دستی</button>
-      <button type="button" class="ghost" id="toggleDailyBtn" aria-expanded="false">گزارش روزانه</button>
       <button type="button" class="ghost" id="downloadBackupBtn">دانلود بک‌آپ</button>
       <button type="button" class="ghost" id="restoreBackupBtn">بازیابی بک‌آپ</button>
       <button type="button" class="ghost" id="runCheckerBtn" disabled>چکر صحت ورود از فایل</button>
@@ -773,44 +821,51 @@
     <p class="backup-meta" id="backupMeta">بک‌آپ خودکار: هنوز ذخیره نشده</p>
     <div class="accuracy-bar" id="accuracyBar">هنوز بررسی دقت انجام نشده است.</div>
 
-    <section class="panel manual-panel" id="manualPanel" hidden>
-      <h2>افزودن نفر دستی</h2>
-      <div class="manual-grid">
-        <label>نام و نام خانوادگی<input id="manualName" type="text" placeholder="مثلاً علی رضایی" /></label>
-        <label>سمت<input id="manualRole" type="text" placeholder="اختیاری" /></label>
-        <label>تاریخ تولد<input id="manualBirth" type="text" placeholder="۱۳۷۰/۰۱/۰۱" /></label>
-        <label>کد ملی<input id="manualNational" type="text" placeholder="۱۰ رقمی" /></label>
-        <label>تلفن<input id="manualPhone" type="text" placeholder="09xxxxxxxxx" /></label>
-        <label>بخش اولیه
-          <select id="manualSection">
-            <option value="">— بدون بخش (باقیمانده) —</option>
-          </select>
-        </label>
-      </div>
-      <div class="manual-actions">
-        <button type="button" id="addManualPersonBtn">افزودن به لیست</button>
-        <span class="meta" id="manualHint">بدون فایل ورد هم می‌توانید نفر ثبت کنید</span>
+    <section class="panel manual-panel drawer-panel" id="manualPanel">
+      <button type="button" class="drawer-toggle" id="manualDrawerToggle" aria-expanded="false" aria-controls="manualDrawerBody">
+        <span class="drawer-title">افزودن نفر دستی</span>
+        <span class="drawer-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div class="drawer-body manual-body" id="manualDrawerBody" hidden>
+        <div class="manual-grid">
+          <label>نام و نام خانوادگی<input id="manualName" type="text" placeholder="مثلاً علی رضایی" /></label>
+          <label>سمت<input id="manualRole" type="text" placeholder="اختیاری" /></label>
+          <label>تاریخ تولد<input id="manualBirth" type="text" placeholder="۱۳۷۰/۰۱/۰۱" /></label>
+          <label>کد ملی<input id="manualNational" type="text" placeholder="۱۰ رقمی" /></label>
+          <label>تلفن<input id="manualPhone" type="text" placeholder="09xxxxxxxxx" /></label>
+          <label>بخش اولیه
+            <select id="manualSection">
+              <option value="">— بدون بخش (باقیمانده) —</option>
+            </select>
+          </label>
+        </div>
+        <div class="manual-actions">
+          <button type="button" id="addManualPersonBtn">افزودن به لیست</button>
+          <span class="meta" id="manualHint">بدون فایل ورد هم می‌توانید نفر ثبت کنید</span>
+        </div>
       </div>
     </section>
 
-    <section class="panel daily-panel" id="dailyPanel" hidden>
-      <div class="section-head">
-        <h2>گزارش روزانه</h2>
-        <span class="meta" id="dailyMeta">۰ نفر</span>
-      </div>
-      <div class="daily-controls">
-        <label>روز گزارش (شمسی)
-          <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
-        </label>
-        <button type="button" id="loadDailyBtn">نمایش گزارش</button>
-        <button type="button" class="ghost" id="dailyTodayBtn">امروز</button>
-        <button type="button" class="ghost" id="dailyYesterdayBtn">دیروز</button>
-        <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
-        <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
-      </div>
-      <div class="day-chips" id="dailyDayChips"></div>
-      <div class="daily-body" id="dailyBody">
-        <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
+    <section class="panel daily-panel drawer-panel" id="dailyPanel">
+      <button type="button" class="drawer-toggle" id="dailyDrawerToggle" aria-expanded="false" aria-controls="dailyDrawerBody">
+        <span class="drawer-title">گزارش روزانه <span class="meta" id="dailyMeta">۰ نفر</span></span>
+        <span class="drawer-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div class="drawer-body" id="dailyDrawerBody" hidden>
+        <div class="daily-controls">
+          <label>روز گزارش (شمسی)
+            <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
+          </label>
+          <button type="button" id="loadDailyBtn">نمایش گزارش</button>
+          <button type="button" class="ghost" id="dailyTodayBtn">امروز</button>
+          <button type="button" class="ghost" id="dailyYesterdayBtn">دیروز</button>
+          <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
+          <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
+        </div>
+        <div class="day-chips" id="dailyDayChips"></div>
+        <div class="daily-body" id="dailyBody">
+          <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
+        </div>
       </div>
     </section>
 
@@ -902,8 +957,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۵: پنل‌های جمع‌شونده + اصلاح چینش بر اساس سمت
-    const APP_VERSION = 5;
+    // نسخه ۶: کشویی شدن افزودن دستی و گزارش روزانه
+    const APP_VERSION = 6;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
 
@@ -936,8 +991,6 @@
       copySummaryBtn: document.getElementById("copySummaryBtn"),
       clearSectionsBtn: document.getElementById("clearSectionsBtn"),
       undoBtn: document.getElementById("undoBtn"),
-      toggleManualBtn: document.getElementById("toggleManualBtn"),
-      toggleDailyBtn: document.getElementById("toggleDailyBtn"),
       downloadBackupBtn: document.getElementById("downloadBackupBtn"),
       restoreBackupBtn: document.getElementById("restoreBackupBtn"),
       backupInput: document.getElementById("backupInput"),
@@ -960,6 +1013,8 @@
       runAccuracyBtn: document.getElementById("runAccuracyBtn"),
       accuracyBar: document.getElementById("accuracyBar"),
       dailyPanel: document.getElementById("dailyPanel"),
+      dailyDrawerToggle: document.getElementById("dailyDrawerToggle"),
+      dailyDrawerBody: document.getElementById("dailyDrawerBody"),
       dailyMeta: document.getElementById("dailyMeta"),
       dailyDayInput: document.getElementById("dailyDayInput"),
       loadDailyBtn: document.getElementById("loadDailyBtn"),
@@ -970,6 +1025,8 @@
       exportDailyWordBtn: document.getElementById("exportDailyWordBtn"),
       dailyBody: document.getElementById("dailyBody"),
       manualPanel: document.getElementById("manualPanel"),
+      manualDrawerToggle: document.getElementById("manualDrawerToggle"),
+      manualDrawerBody: document.getElementById("manualDrawerBody"),
       manualName: document.getElementById("manualName"),
       manualRole: document.getElementById("manualRole"),
       manualBirth: document.getElementById("manualBirth"),
@@ -3209,29 +3266,23 @@
 
     els.undoBtn.addEventListener("click", undoLast);
 
-    function setPanelOpen(panel, button, open) {
-      if (!panel || !button) return;
-      panel.hidden = !open;
-      button.setAttribute("aria-expanded", open ? "true" : "false");
-      button.classList.toggle("active-toggle", open);
+    function setDrawerOpen(panel, toggle, body, open) {
+      if (!panel || !toggle || !body) return;
+      panel.classList.toggle("is-open", open);
+      body.hidden = !open;
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
-    els.toggleManualBtn.addEventListener("click", () => {
-      const open = els.manualPanel.hidden;
-      setPanelOpen(els.manualPanel, els.toggleManualBtn, open);
-      if (open) {
-        setPanelOpen(els.dailyPanel, els.toggleDailyBtn, false);
-        els.manualName.focus();
-      }
+    els.manualDrawerToggle.addEventListener("click", () => {
+      const open = !els.manualPanel.classList.contains("is-open");
+      setDrawerOpen(els.manualPanel, els.manualDrawerToggle, els.manualDrawerBody, open);
+      if (open) els.manualName.focus();
     });
 
-    els.toggleDailyBtn.addEventListener("click", () => {
-      const open = els.dailyPanel.hidden;
-      setPanelOpen(els.dailyPanel, els.toggleDailyBtn, open);
-      if (open) {
-        setPanelOpen(els.manualPanel, els.toggleManualBtn, false);
-        renderDailyReport(getDailyPeople(), dailyLabel());
-      }
+    els.dailyDrawerToggle.addEventListener("click", () => {
+      const open = !els.dailyPanel.classList.contains("is-open");
+      setDrawerOpen(els.dailyPanel, els.dailyDrawerToggle, els.dailyDrawerBody, open);
+      if (open) renderDailyReport(getDailyPeople(), dailyLabel());
     });
 
     els.addManualPersonBtn.addEventListener("click", () => {
