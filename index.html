@@ -315,6 +315,55 @@
       margin-top: 0.45rem;
     }
 
+    .bucket.depth-1 {
+      border-color: #c4b08a;
+      background: #fffaf2;
+    }
+
+    .bucket.depth-1 .bucket-head {
+      background: #f3e6d2;
+    }
+
+    .bucket.depth-2 {
+      border-color: #8eafc4;
+      background: #f3f8fc;
+    }
+
+    .bucket.depth-2 .bucket-head {
+      background: #dceaf3;
+    }
+
+    .bucket.depth-3,
+    .bucket.depth-4,
+    .bucket.depth-5,
+    .bucket.depth-6 {
+      border-color: #b49bc4;
+      background: #f8f3fc;
+    }
+
+    .bucket.depth-3 .bucket-head,
+    .bucket.depth-4 .bucket-head,
+    .bucket.depth-5 .bucket-head,
+    .bucket.depth-6 .bucket-head {
+      background: #ebe0f3;
+    }
+
+    .bucket.depth-1.has-members:hover {
+      border-color: #b8955f;
+      background: #fff6e8;
+    }
+
+    .bucket.depth-2.has-members:hover {
+      border-color: #6f98b3;
+      background: #ebf4fa;
+    }
+
+    .child-sections .open-child-section {
+      background: #fffaf2;
+      border-color: #c4b08a;
+      color: #7a5a28;
+    }
+
     .bucket-path {
       display: block;
       margin-top: 0.15rem;
@@ -875,12 +924,12 @@
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۹</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۰</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
         گزارش روزانه با تاریخ شمسی کار می‌کند. چکر صحت ورود، اطلاعات داخل برنامه را با فایل ورودی مقایسه می‌کند.
-        در خروجی Word فیلد سمت نمی‌آید.
+        در خروجی Word و Excel فیلد سمت نمی‌آید.
       </p>
     </header>
 
@@ -893,6 +942,47 @@
       <button type="button" class="ghost" id="runAccuracyBtn" disabled>بررسی دقت کدملی/تلفن</button>
       <input id="backupInput" type="file" accept="application/json,.json" hidden />
       <input id="recheckInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="section-head">
+          <h2>لیست افراد باقیمانده</h2>
+          <span class="meta" id="peopleMeta">۰ نفر</span>
+        </div>
+        <div class="people" id="peopleList">
+          <div class="empty">بعد از بارگذاری فایل، اسامی اینجا می‌آیند.</div>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش خودکار بر اساس سمت</button>
+          <button type="button" class="ghost" id="unassignAllBtn" disabled>خروج از همه بخش‌ها</button>
+          <button type="button" class="danger" id="clearPeopleBtn" disabled>پاک‌کردن لیست</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>بخش‌های تعریف‌شده</h2>
+          <span class="meta" id="sectionsMeta">۰ بخش</span>
+        </div>
+        <div class="create-bar">
+          <input id="sectionNameInput" type="text" placeholder="نام بخش یا زیرمجموعه، مثلاً مدیر عامل" />
+          <select id="sectionParentSelect" aria-label="بخش والد">
+            <option value="">— بخش اصلی (مجموعه کلی) —</option>
+          </select>
+          <button type="button" id="addSectionBtn">افزودن</button>
+          <button type="button" class="ghost" id="sectionsFromRolesBtn" disabled>از روی سمت‌ها</button>
+        </div>
+        <div class="sections" id="sectionsList">
+          <div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="exportWordBtn" disabled>خروجی Word</button>
+          <button type="button" class="ghost" id="exportExcelBtn" disabled>خروجی Excel</button>
+          <button type="button" class="ghost" id="copySummaryBtn" disabled>کپی خلاصه</button>
+          <button type="button" class="danger" id="clearSectionsBtn" disabled>حذف همه بخش‌ها</button>
+        </div>
+      </section>
     </div>
 
     <label class="panel drop" id="dropzone" for="fileInput">
@@ -930,29 +1020,6 @@
       </div>
     </section>
 
-    <section class="panel daily-panel drawer-panel" id="dailyPanel">
-      <button type="button" class="drawer-toggle" id="dailyDrawerToggle" aria-expanded="false" aria-controls="dailyDrawerBody">
-        <span class="drawer-title">گزارش روزانه <span class="meta" id="dailyMeta">۰ نفر</span></span>
-        <span class="drawer-chevron" aria-hidden="true">▼</span>
-      </button>
-      <div class="drawer-body" id="dailyDrawerBody" hidden>
-        <div class="daily-controls">
-          <label>روز گزارش (شمسی)
-            <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
-          </label>
-          <button type="button" id="loadDailyBtn">نمایش گزارش</button>
-          <button type="button" class="ghost" id="dailyTodayBtn">امروز</button>
-          <button type="button" class="ghost" id="dailyYesterdayBtn">دیروز</button>
-          <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
-          <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
-        </div>
-        <div class="day-chips" id="dailyDayChips"></div>
-        <div class="daily-body" id="dailyBody">
-          <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
-        </div>
-      </div>
-    </section>
-
     <section class="panel search-panel">
       <div class="section-head">
         <h2>جست‌وجو</h2>
@@ -969,45 +1036,29 @@
       </div>
     </section>
 
-    <div class="grid">
-      <section class="panel">
-        <div class="section-head">
-          <h2>لیست افراد باقیمانده</h2>
-          <span class="meta" id="peopleMeta">۰ نفر</span>
+    <section class="panel daily-panel drawer-panel" id="dailyPanel">
+      <button type="button" class="drawer-toggle" id="dailyDrawerToggle" aria-expanded="false" aria-controls="dailyDrawerBody">
+        <span class="drawer-title">گزارش روزانه <span class="meta" id="dailyMeta">۰ نفر</span></span>
+        <span class="drawer-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div class="drawer-body" id="dailyDrawerBody" hidden>
+        <div class="daily-controls">
+          <label>روز گزارش (شمسی)
+            <input id="dailyDayInput" type="text" placeholder="خالی = امروز | مثلاً ۱۴۰۵/۰۵/۲۰" />
+          </label>
+          <button type="button" id="loadDailyBtn">نمایش گزارش</button>
+          <button type="button" class="ghost" id="dailyTodayBtn">امروز</button>
+          <button type="button" class="ghost" id="dailyYesterdayBtn">دیروز</button>
+          <button type="button" class="ghost" id="printDailyBtn" disabled>پرینت گزارش</button>
+          <button type="button" class="ghost" id="exportDailyWordBtn" disabled>خروجی Word گزارش</button>
+          <button type="button" class="ghost" id="exportDailyExcelBtn" disabled>خروجی Excel گزارش</button>
         </div>
-        <div class="people" id="peopleList">
-          <div class="empty">بعد از بارگذاری فایل، اسامی اینجا می‌آیند.</div>
+        <div class="day-chips" id="dailyDayChips"></div>
+        <div class="daily-body" id="dailyBody">
+          <div class="empty">برای دیدن ورودی‌های یک روز، «نمایش گزارش» را بزنید.</div>
         </div>
-        <div class="toolbar">
-          <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش خودکار بر اساس سمت</button>
-          <button type="button" class="ghost" id="unassignAllBtn" disabled>خروج از همه بخش‌ها</button>
-          <button type="button" class="danger" id="clearPeopleBtn" disabled>پاک‌کردن لیست</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>بخش‌های تعریف‌شده</h2>
-          <span class="meta" id="sectionsMeta">۰ بخش</span>
-        </div>
-        <div class="create-bar">
-          <input id="sectionNameInput" type="text" placeholder="نام بخش یا زیرمجموعه، مثلاً مدیر عامل" />
-          <select id="sectionParentSelect" aria-label="بخش والد">
-            <option value="">— بخش اصلی (مجموعه کلی) —</option>
-          </select>
-          <button type="button" id="addSectionBtn">افزودن</button>
-          <button type="button" class="ghost" id="sectionsFromRolesBtn" disabled>از روی سمت‌ها</button>
-        </div>
-        <div class="sections" id="sectionsList">
-          <div class="empty">هنوز بخشی ندارید. یک بخش بسازید یا از روی سمت‌ها بسازید.</div>
-        </div>
-        <div class="toolbar">
-          <button type="button" id="exportWordBtn" disabled>خروجی Word</button>
-          <button type="button" class="ghost" id="copySummaryBtn" disabled>کپی خلاصه</button>
-          <button type="button" class="danger" id="clearSectionsBtn" disabled>حذف همه بخش‌ها</button>
-        </div>
-      </section>
-    </div>
+      </div>
+    </section>
 
     <section class="panel checker" id="checkerPanel" hidden>
       <div class="section-head">
@@ -1018,8 +1069,8 @@
     </section>
 
     <p class="panel preview-note">
-      گزارش روزانه ورودی‌های همان روز را نشان می‌دهد. چکر و بررسی دقت کمک می‌کنند کسی از قلم نیفتد و کد ملی/تلفن درست باشد.
-      خروجی Word برای هر دسته جدول دارد و فیلد سمت در خروجی نیست.
+      هر بخش می‌تواند مجموعه کلی باشد و زیرمجموعه بگیرد (مثلاً مدیر عامل » سپاه » نیرو انتظامی).
+      زیرمجموعه‌ها با رنگ جدا مشخص‌اند. هرجا خروجی Word هست، خروجی Excel هم هست.
     </p>
   </div>
 
@@ -1032,6 +1083,7 @@
         <div class="modal-actions">
           <button type="button" id="printSectionBtn">پرینت</button>
           <button type="button" class="ghost" id="exportSectionWordBtn">خروجی Word</button>
+          <button type="button" class="ghost" id="exportSectionExcelBtn">خروجی Excel</button>
           <button type="button" class="ghost" id="closeSectionModalBtn">بستن</button>
         </div>
       </div>
@@ -1044,8 +1096,8 @@
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۹: بخش‌های سلسله‌مراتبی (مجموعه / زیرمجموعه)
-    const APP_VERSION = 9;
+    // نسخه ۱۰: رنگ زیرمجموعه، خروجی Excel، اولویت لیست افراد/بخش‌ها
+    const APP_VERSION = 10;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const SECTION_PATH_SEP = " » ";
@@ -1077,6 +1129,7 @@
       unassignAllBtn: document.getElementById("unassignAllBtn"),
       clearPeopleBtn: document.getElementById("clearPeopleBtn"),
       exportWordBtn: document.getElementById("exportWordBtn"),
+      exportExcelBtn: document.getElementById("exportExcelBtn"),
       copySummaryBtn: document.getElementById("copySummaryBtn"),
       clearSectionsBtn: document.getElementById("clearSectionsBtn"),
       undoBtn: document.getElementById("undoBtn"),
@@ -1094,6 +1147,7 @@
       sectionModalBody: document.getElementById("sectionModalBody"),
       printSectionBtn: document.getElementById("printSectionBtn"),
       exportSectionWordBtn: document.getElementById("exportSectionWordBtn"),
+      exportSectionExcelBtn: document.getElementById("exportSectionExcelBtn"),
       closeSectionModalBtn: document.getElementById("closeSectionModalBtn"),
       searchMeta: document.getElementById("searchMeta"),
       searchQuery: document.getElementById("searchQuery"),
@@ -1112,6 +1166,7 @@
       dailyDayChips: document.getElementById("dailyDayChips"),
       printDailyBtn: document.getElementById("printDailyBtn"),
       exportDailyWordBtn: document.getElementById("exportDailyWordBtn"),
+      exportDailyExcelBtn: document.getElementById("exportDailyExcelBtn"),
       dailyBody: document.getElementById("dailyBody"),
       manualPanel: document.getElementById("manualPanel"),
       manualDrawerToggle: document.getElementById("manualDrawerToggle"),
@@ -1601,6 +1656,7 @@
       els.dailyMeta.textContent = `${people.length} نفر`;
       els.printDailyBtn.disabled = !people.length;
       els.exportDailyWordBtn.disabled = !people.length;
+      els.exportDailyExcelBtn.disabled = !people.length;
 
       if (!people.length) {
         els.dailyBody.innerHTML = `<div class="empty">برای روز «${escapeHtml(label)}» ورودی‌ای ثبت نشده است.</div>`;
@@ -2473,6 +2529,7 @@
       els.clearPeopleBtn.disabled = !hasPeople;
       els.sectionsFromRolesBtn.disabled = !hasPeople;
       els.exportWordBtn.disabled = !(hasSections && assignedCount);
+      els.exportExcelBtn.disabled = !(hasSections && assignedCount);
       els.copySummaryBtn.disabled = !(hasSections && assignedCount);
       els.clearSectionsBtn.disabled = !hasSections;
       els.runCheckerBtn.disabled = !hasPeople || !state.batches.length;
@@ -2583,7 +2640,7 @@
         const path = sectionPathLabel(section);
         const indent = Math.min(depth, 6) * 0.85;
         return `
-          <article class="bucket ${hasMembers ? "has-members" : ""} ${depth ? "nested" : ""}" data-section-id="${escapeHtml(section.id)}" style="margin-inline-start:${indent}rem">
+          <article class="bucket ${hasMembers ? "has-members" : ""} ${depth ? `nested depth-${Math.min(depth, 6)}` : ""}" data-section-id="${escapeHtml(section.id)}" style="margin-inline-start:${indent}rem">
             <div class="bucket-head">
               <div class="bucket-title-wrap open-section" data-section-id="${escapeHtml(section.id)}" role="button" tabindex="0">
                 <div>
@@ -2849,6 +2906,160 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    function excelSheetName(name) {
+      return String(name || "Sheet")
+        .replace(/[\\/*?:\[\]]+/g, "-")
+        .slice(0, 31) || "Sheet";
+    }
+
+    function peopleToExcelRows(members) {
+      const rows = [["ردیف", "نام و نام خانوادگی", "تاریخ تولد", "کد ملی", "تلفن"]];
+      members.forEach((person, index) => {
+        rows.push([
+          String(index + 1),
+          person.name || "",
+          person.birthDate || "",
+          person.nationalId || "",
+          person.phone || "",
+        ]);
+      });
+      return rows;
+    }
+
+    function buildExcelWorkbook(sheets) {
+      const usedNames = new Set();
+      const uniqueName = (raw) => {
+        let base = excelSheetName(raw);
+        let name = base;
+        let i = 2;
+        while (usedNames.has(name)) {
+          const suffix = `-${i}`;
+          name = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`;
+          i += 1;
+        }
+        usedNames.add(name);
+        return name;
+      };
+
+      const worksheetXml = sheets.map((sheet, index) => {
+        const name = uniqueName(sheet.name);
+        const rowsXml = (sheet.rows || []).map((row, rIdx) => {
+          const cells = row.map((cell, cIdx) => {
+            const col = String.fromCharCode(65 + cIdx);
+            const ref = `${col}${rIdx + 1}`;
+            const value = xmlEscape(cell ?? "");
+            return `<Cell ss:Index="${cIdx + 1}"><Data ss:Type="String">${value}</Data></Cell>`;
+          }).join("");
+          return `<Row ss:Index="${rIdx + 1}">${cells}</Row>`;
+        }).join("");
+        return `
+          <Worksheet ss:Name="${xmlEscape(name)}">
+            <Table>${rowsXml}</Table>
+          </Worksheet>`;
+      }).join("\n");
+
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook
+  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:html="http://www.w3.org/TR/REC-html40">
+  <Styles>
+    <Style ss:ID="Default" ss:Name="Normal">
+      <Alignment ss:Horizontal="Right" ss:ReadingOrder="RightToLeft"/>
+      <Font ss:FontName="Tahoma" ss:Size="11"/>
+    </Style>
+  </Styles>
+  ${worksheetXml}
+</Workbook>`;
+    }
+
+    function downloadExcel(sheets, filename) {
+      const xml = buildExcelWorkbook(sheets);
+      const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.endsWith(".xls") ? filename : `${filename}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportActiveSectionExcel() {
+      if (!activeSectionId) return;
+      const section = state.sections.find((s) => s.id === activeSectionId);
+      if (!section) return;
+      const members = peopleInSection(section.id);
+      if (!members.length) {
+        toast("چیزی برای خروجی Excel نیست");
+        return;
+      }
+      const label = sectionPathLabel(section);
+      const safeName = label.replace(/[\\/:*?"<>|»]+/g, "-").slice(0, 60);
+      downloadExcel(
+        [{ name: label, rows: peopleToExcelRows(members) }],
+        `بخش-${safeName}.xls`
+      );
+      toast(`خروجی Excel بخش «${label}» ذخیره شد`);
+    }
+
+    function exportAllSectionsExcel() {
+      const sheets = [];
+      for (const { section } of flattenSectionsTree()) {
+        const members = peopleInSection(section.id);
+        if (!members.length) continue;
+        sheets.push({
+          name: sectionPathLabel(section),
+          rows: peopleToExcelRows(members),
+        });
+      }
+      if (!sheets.length) {
+        toast("ابتدا افراد را در بخش‌ها قرار دهید");
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadExcel(sheets, `تفکیک-مهمانان-${stamp}.xls`);
+      toast("خروجی Excel جدولی آماده شد");
+    }
+
+    function exportDailyExcel() {
+      if (!lastDailyPeople.length) {
+        toast("گزارشی برای خروجی نیست");
+        return;
+      }
+      const sheets = [];
+      const bySection = new Map();
+      for (const { section } of flattenSectionsTree()) bySection.set(section.id, []);
+      const none = [];
+      for (const person of lastDailyPeople) {
+        const ids = getSectionIds(person);
+        if (!ids.length) {
+          none.push(person);
+          continue;
+        }
+        for (const id of ids) {
+          if (!bySection.has(id)) bySection.set(id, []);
+          bySection.get(id).push(person);
+        }
+      }
+      for (const { section } of flattenSectionsTree()) {
+        const members = bySection.get(section.id) || [];
+        if (!members.length) continue;
+        sheets.push({
+          name: sectionPathLabel(section),
+          rows: peopleToExcelRows(members),
+        });
+      }
+      if (none.length) {
+        sheets.push({ name: "بدون بخش", rows: peopleToExcelRows(none) });
+      }
+      const safeDay = String(lastDailyLabel || "روز").replace(/[\\/:*?"<>|]+/g, "-");
+      downloadExcel(sheets, `گزارش-روزانه-${safeDay}.xls`);
+      toast("خروجی Excel گزارش روزانه ذخیره شد");
     }
 
     async function exportActiveSectionWord() {
@@ -3656,6 +3867,15 @@
       });
     });
 
+    els.exportExcelBtn.addEventListener("click", () => {
+      try {
+        exportAllSectionsExcel();
+      } catch (err) {
+        console.error(err);
+        toast("ساخت فایل Excel ناموفق بود");
+      }
+    });
+
     els.copySummaryBtn.addEventListener("click", async () => {
       const text = buildSummaryText();
       if (!text) {
@@ -3741,6 +3961,14 @@
         console.error(err);
         toast("خروجی گزارش روزانه ناموفق بود");
       });
+    });
+    els.exportDailyExcelBtn.addEventListener("click", () => {
+      try {
+        exportDailyExcel();
+      } catch (err) {
+        console.error(err);
+        toast("خروجی Excel گزارش روزانه ناموفق بود");
+      }
     });
     els.dailyDayInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -4046,6 +4274,14 @@
         console.error(err);
         toast("خروجی Word بخش ناموفق بود");
       });
+    });
+    els.exportSectionExcelBtn.addEventListener("click", () => {
+      try {
+        exportActiveSectionExcel();
+      } catch (err) {
+        console.error(err);
+        toast("خروجی Excel بخش ناموفق بود");
+      }
     });
     els.sectionModal.addEventListener("click", (e) => {
       if (e.target === els.sectionModal) closeSectionModal();
