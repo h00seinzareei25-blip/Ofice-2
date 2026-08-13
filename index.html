@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۱</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۲</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1323,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۱: اصلاح تاریخ برعکس در خروجی Word بعد از ورود تفکیک‌شده
-    const APP_VERSION = 21;
+    // نسخه ۲۲: همه تاریخ‌ها یکسان — سال/ماه/روز (از چپ)
+    const APP_VERSION = 22;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1895,10 +1895,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!text || text === "—" || text === "-") return "";
       const parts = parseBirthDateParts(text);
       if (!parts) return text;
-      // Ofish / office convention: روز/ماه/سال (not year-first)
-      const canon = `${parts.d}/${parts.mo}/${parts.y}`;
+      // Canonical order (left → right): سال / ماه / روز
+      const canon = `${parts.y}/${String(parts.mo).padStart(2, "0")}/${String(parts.d).padStart(2, "0")}`;
       // Keep Persian digits if the source used them
       return /[۰-۹]/.test(text) ? toPersianDigits(canon) : canon;
+    }
+
+    function canonicalizePersonBirthDates(people = state.people) {
+      for (const person of people || []) {
+        if (!person) continue;
+        if (person.birthDate) person.birthDate = normalizeBirthDate(person.birthDate);
+        if (person.sourceSnapshot?.birthDate) {
+          person.sourceSnapshot.birthDate = normalizeBirthDate(person.sourceSnapshot.birthDate);
+        }
+      }
     }
 
     function wordSafeLtrText(value) {
@@ -3216,6 +3226,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             }
           : captureSourceSnapshot(person);
       }
+      canonicalizePersonBirthDates(state.people);
       state.lastCheck = payload.lastCheck || null;
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
     }
@@ -3350,7 +3361,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         row: String(state.people.length + 1),
         name,
         role: normalizeLabel(els.manualRole.value),
-        birthDate: normalizeLabel(els.manualBirth.value),
+        birthDate: normalizeBirthDate(els.manualBirth.value),
         nationalId: normalizeLabel(els.manualNational.value),
         phone: normalizeLabel(els.manualPhone.value),
         sourceFile: "ثبت دستی",
@@ -3863,7 +3874,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         rows.push([
           String(index + 1),
           person.name || "",
-          person.birthDate || "",
+          normalizeBirthDate(person.birthDate || "") || "",
           person.nationalId || "",
           person.phone || "",
         ]);
@@ -4407,7 +4418,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         const values = [
           { text: wordSafeLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
           { text: wordSafeLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
-          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false },
+          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false }, // سال/ماه/روز
           { text: person.name || "—", ltr: false, align: "center", bold: true },
           { text: wordSafeLtrText(String(index + 1)), ltr: true, align: "center", bold: false },
         ];
@@ -5225,7 +5236,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         withChange("ویرایش نفر باقیمانده", () => {
           person.name = nextName;
           person.role = card.querySelector(".edit-role").value.trim();
-          person.birthDate = card.querySelector(".edit-birth").value.trim();
+          person.birthDate = normalizeBirthDate(card.querySelector(".edit-birth").value.trim());
           person.nationalId = card.querySelector(".edit-national").value.trim();
           person.phone = card.querySelector(".edit-phone").value.trim();
         });
@@ -5391,7 +5402,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         withChange("ویرایش نفر", () => {
           person.name = nextName;
           person.role = row.querySelector(".edit-role").value.trim();
-          person.birthDate = row.querySelector(".edit-birth").value.trim();
+          person.birthDate = normalizeBirthDate(row.querySelector(".edit-birth").value.trim());
           person.nationalId = row.querySelector(".edit-national").value.trim();
           person.phone = row.querySelector(".edit-phone").value.trim();
         });
