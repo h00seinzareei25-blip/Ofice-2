@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۲</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۳</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1323,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۲: همه تاریخ‌ها یکسان — سال/ماه/روز (از چپ)
-    const APP_VERSION = 22;
+    // نسخه ۲۳: ستون «فایل ورود» در همه خروجی‌های Word بخش‌ها
+    const APP_VERSION = 23;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -2054,6 +2054,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         nationalId: find("کد ملی", "کدملی"),
         phone: find("تلفن", "موبایل"),
         role: find("سمت", "عنوان در زیرنویس"),
+        sourceFile: find("فایل ورود", "فایل ورودی", "فایل"),
       };
       if (map.name < 0) return null;
       if (map.nationalId < 0 && map.phone < 0) return null;
@@ -2094,13 +2095,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
 
       const candidates = [
+        // App export with source-file column (after name in RTL reading)
+        { phone: 0, nationalId: 1, birth: 2, sourceFile: 3, name: 4, row: 5, role: -1 },
         // Common ofish / office Word (LTR cells, row on the right)
-        { phone: 0, nationalId: 1, birth: 2, role: 3, name: 4, row: 5 },
-        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
+        { phone: 0, nationalId: 1, birth: 2, role: 3, name: 4, row: 5, sourceFile: -1 },
+        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1, sourceFile: -1 },
         // Older app export with bidiVisual logical order
-        { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4, role: -1 },
-        // New app export without bidiVisual (ofish order, no role)
-        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
+        { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4, role: -1, sourceFile: -1 },
+        // Previous app export without bidiVisual (ofish order, no role)
+        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1, sourceFile: -1 },
       ];
       let best = null;
       let bestScore = -1;
@@ -4399,10 +4402,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     function wordPeopleTable(members) {
       // Match common Persian ofish Word tables (no bidiVisual):
-      // left → right: تلفن | کد ملی | تاریخ تولد | نام و نام خانوادگی | ردیف
-      // so «ردیف» sits on the right edge like office files.
-      const widths = [2000, 2000, 1800, 3200, 900];
-      const headers = ["تلفن", "کد ملی", "تاریخ تولد", "نام و نام خانوادگی", "ردیف"];
+      // left → right: تلفن | کد ملی | تاریخ تولد | فایل ورود | نام و نام خانوادگی | ردیف
+      // RTL reading: ردیف → نام → فایل ورود → …
+      const widths = [1600, 1600, 1400, 2200, 2600, 700];
+      const headers = ["تلفن", "کد ملی", "تاریخ تولد", "فایل ورود", "نام و نام خانوادگی", "ردیف"];
+      const persianCols = new Set([3, 4]); // فایل ورود + نام
       const headerRow = `
         <w:tr>
           ${headers.map((title, i) => wordTableCell(title, {
@@ -4410,7 +4414,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             header: true,
             bold: true,
             align: "center",
-            ltr: i !== 3,
+            ltr: !persianCols.has(i),
           })).join("")}
         </w:tr>`;
 
@@ -4418,7 +4422,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         const values = [
           { text: wordSafeLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
           { text: wordSafeLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
-          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false }, // سال/ماه/روز
+          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false },
+          { text: person.sourceFile || "—", ltr: false, align: "center", bold: false },
           { text: person.name || "—", ltr: false, align: "center", bold: true },
           { text: wordSafeLtrText(String(index + 1)), ltr: true, align: "center", bold: false },
         ];
