@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۰</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۱</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1323,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۰: ورود تفکیک‌شده به باقیمانده + چینش درست ستون‌های Word
-    const APP_VERSION = 20;
+    // نسخه ۲۱: اصلاح تاریخ برعکس در خروجی Word بعد از ورود تفکیک‌شده
+    const APP_VERSION = 21;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1618,7 +1618,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       // Reliable mapping: phone/nationalId/birth at start, role/name/row at end.
       const phone = texts[0] || "";
       const nationalId = texts[1] || "";
-      const birthDate = texts[2] || "";
+      const birthDate = normalizeBirthDate(texts[2] || "");
       const role = texts[texts.length - 3] || "";
       const name = texts[texts.length - 2] || "";
       const row = texts[texts.length - 1] || String(index + 1);
@@ -1850,10 +1850,61 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     function isValidBirthDate(value) {
-      const text = toEnglishDigits(normalizeLabel(value));
-      if (!text) return false;
-      // Accept 1370/01/01, 70/1/1, and ofish-style 2/4/1357
-      return /^\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}$/.test(text);
+      return Boolean(parseBirthDateParts(value));
+    }
+
+    function parseBirthDateParts(value) {
+      const tryParts = (text) => {
+        const raw = stripDirectionalMarks(toEnglishDigits(normalizeLabel(text)));
+        if (!raw) return null;
+        const m = raw.match(/^(\d{1,4})[\/\-](\d{1,2})[\/\-](\d{1,4})$/);
+        if (!m) return null;
+        let p1 = Number(m[1]);
+        let p2 = Number(m[2]);
+        let p3 = Number(m[3]);
+        let y;
+        let mo;
+        let d;
+        if (p1 >= 1200 && p1 <= 1600 && p2 >= 1 && p2 <= 12 && p3 >= 1 && p3 <= 31) {
+          y = p1; mo = p2; d = p3; // y/m/d
+        } else if (p3 >= 1200 && p3 <= 1600 && p2 >= 1 && p2 <= 12 && p1 >= 1 && p1 <= 31) {
+          d = p1; mo = p2; y = p3; // d/m/y (common in ofish/sorted files)
+        } else if (p3 >= 1200 && p3 <= 1600 && p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+          mo = p1; d = p2; y = p3; // m/d/y
+        } else if (p1 > 31 && p2 >= 1 && p2 <= 12) {
+          y = p1 < 100 ? p1 + 1300 : p1; mo = p2; d = p3;
+        } else if (p3 > 31 && p2 >= 1 && p2 <= 12) {
+          d = p1; mo = p2; y = p3 < 100 ? p3 + 1300 : p3;
+        } else {
+          return null;
+        }
+        if (y < 100) y += 1300;
+        if (!(y >= 1200 && y <= 1600 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+        return { y, mo, d };
+      };
+
+      const direct = tryParts(value);
+      if (direct) return direct;
+      // Some Word RTL files store the date visually reversed in XML
+      const reversed = [...stripDirectionalMarks(toEnglishDigits(String(value || "")))].reverse().join("");
+      return tryParts(reversed);
+    }
+
+    function normalizeBirthDate(value) {
+      const text = stripDirectionalMarks(normalizeLabel(value));
+      if (!text || text === "—" || text === "-") return "";
+      const parts = parseBirthDateParts(text);
+      if (!parts) return text;
+      // Ofish / office convention: روز/ماه/سال (not year-first)
+      const canon = `${parts.d}/${parts.mo}/${parts.y}`;
+      // Keep Persian digits if the source used them
+      return /[۰-۹]/.test(text) ? toPersianDigits(canon) : canon;
+    }
+
+    function wordSafeLtrText(value) {
+      // LRE…PDF keeps digit runs (dates, phone, national id) from flipping in RTL Word
+      const text = stripDirectionalMarks(String(value ?? "").trim() || "—");
+      return `\u202A${text}\u202C`;
     }
 
     function validatePersonFields(person) {
@@ -2084,7 +2135,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if (isHeaderLabel(name)) return;
 
         const role = fields.role === "—" ? "" : (fields.role || "");
-        const birthDate = fields.birthDate === "—" ? "" : (fields.birthDate || "");
+        const birthDate = normalizeBirthDate(fields.birthDate === "—" ? "" : (fields.birthDate || ""));
         const nationalId = fields.nationalId === "—" ? "" : (fields.nationalId || "");
         const phone = fields.phone === "—" ? "" : (fields.phone || "");
 
@@ -4354,11 +4405,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       const bodyRows = members.map((person, index) => {
         const values = [
-          { text: person.phone || "—", ltr: true, align: "center", bold: false },
-          { text: person.nationalId || "—", ltr: true, align: "center", bold: false },
-          { text: person.birthDate || "—", ltr: true, align: "center", bold: false },
+          { text: wordSafeLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
+          { text: wordSafeLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
+          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false },
           { text: person.name || "—", ltr: false, align: "center", bold: true },
-          { text: String(index + 1), ltr: true, align: "center", bold: false },
+          { text: wordSafeLtrText(String(index + 1)), ltr: true, align: "center", bold: false },
         ];
         return `
           <w:tr>
