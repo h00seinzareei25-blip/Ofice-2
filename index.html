@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۹</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۰</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1202,7 +1202,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <button type="button" class="ghost" id="sortedImportBtn">انتخاب فایل تفکیک‌شده</button>
         <input id="sortedImportInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
       </div>
-      <p class="meta sorted-import-hint">افراد واردشده با علامت «تفکیک‌شده» مشخص می‌شوند و مستقیم داخل بخش مربوط به عنوان‌شان می‌روند.</p>
+      <p class="meta sorted-import-hint">افراد واردشده اول به «لیست باقیمانده» می‌آیند (با سمتِ عنوان بخش). بعد می‌توانید با «تفکیک همه در بخش‌ها» جابه‌جا کنید.</p>
     </div>
 
     <p class="status" id="status">هنوز فایلی بارگذاری نشده است.</p>
@@ -1323,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۹: دکمه تفکیک همه افراد در بخش‌های خودشان
-    const APP_VERSION = 19;
+    // نسخه ۲۰: ورود تفکیک‌شده به باقیمانده + چینش درست ستون‌های Word
+    const APP_VERSION = 20;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1852,7 +1852,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     function isValidBirthDate(value) {
       const text = toEnglishDigits(normalizeLabel(value));
       if (!text) return false;
-      return /^\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(text);
+      // Accept 1370/01/01, 70/1/1, and ofish-style 2/4/1357
+      return /^\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4}$/.test(text);
     }
 
     function validatePersonFields(person) {
@@ -1971,59 +1972,95 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     function isSortedPeopleHeader(texts) {
       const joined = texts.map((t) => normalizeLabel(stripDirectionalMarks(t))).join(" ");
-      return joined.includes("نام و نام خانوادگی") && joined.includes("کد ملی");
+      const hasName = joined.includes("نام");
+      const hasId = joined.includes("کد ملی") || joined.includes("کدملی");
+      const hasPhone = joined.includes("تلفن") || joined.includes("موبایل");
+      return hasName && (hasId || hasPhone);
     }
 
     function detectSortedColumnMap(texts) {
       const norms = texts.map((t) => normalizeLabel(stripDirectionalMarks(t)));
-      const find = (...keys) => norms.findIndex((t) => keys.some((k) => t.includes(k)));
+      const find = (...keys) => norms.findIndex((t) => keys.some((k) => t === k || t.includes(k)));
       const map = {
         row: find("ردیف"),
-        name: find("نام"),
-        birth: find("تاریخ"),
+        // Prefer full name header before bare «نام»
+        name: (() => {
+          const full = norms.findIndex((t) => t.includes("نام و نام خانوادگی") || t.includes("نام ونام خانوادگی"));
+          if (full >= 0) return full;
+          return find("نام");
+        })(),
+        birth: find("تاریخ تولد", "تاریخ"),
         nationalId: find("کد ملی", "کدملی"),
         phone: find("تلفن", "موبایل"),
+        role: find("سمت", "عنوان در زیرنویس"),
       };
-      if (map.name < 0 || map.row < 0 || map.nationalId < 0 || map.phone < 0 || map.birth < 0) {
-        return null;
-      }
+      if (map.name < 0) return null;
+      if (map.nationalId < 0 && map.phone < 0) return null;
       return map;
     }
 
     function scoreSortedColumnMap(texts, map) {
-      const get = (key) => texts[map[key]] || "";
+      const get = (key) => (map[key] >= 0 ? (texts[map[key]] || "") : "");
       let score = 0;
       const row = toEnglishDigits(get("row")).replace(/[^\d]/g, "");
       if (row) score += 1;
-      if (/[\u0600-\u06FF]/.test(get("name")) && !/^\d+$/.test(toEnglishDigits(get("name")).replace(/\D/g, ""))) score += 3;
+      const name = get("name");
+      if (/[\u0600-\u06FF]/.test(name) && !/^\d+$/.test(toEnglishDigits(name).replace(/\D/g, ""))) {
+        score += 3;
+        if (name.length <= 40) score += 2;
+        if (name.length > 60) score -= 2;
+      }
       if (/\d{2,4}\/\d{1,2}\/\d{1,2}/.test(toEnglishDigits(get("birth")))) score += 2;
       const nid = compactDigits(get("nationalId"));
       if (nid.length >= 8 && nid.length <= 12) score += 2;
       const phone = compactDigits(get("phone"));
       if (phone.length >= 10) score += 2;
+      if (map.role >= 0 && normalizeLabel(get("role"))) score += 1;
       return score;
     }
 
     function resolveSortedRowFields(texts, headerMap) {
       if (headerMap) {
+        const pick = (key) => (headerMap[key] >= 0 ? (texts[headerMap[key]] || "") : "");
         return {
-          row: texts[headerMap.row] || "",
-          name: texts[headerMap.name] || "",
-          birthDate: texts[headerMap.birth] || "",
-          nationalId: texts[headerMap.nationalId] || "",
-          phone: texts[headerMap.phone] || "",
+          row: pick("row"),
+          name: pick("name"),
+          birthDate: pick("birth"),
+          nationalId: pick("nationalId"),
+          phone: pick("phone"),
+          role: pick("role"),
         };
       }
-      const forward = { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4 };
-      const reverse = { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4 };
-      const useReverse = scoreSortedColumnMap(texts, reverse) > scoreSortedColumnMap(texts, forward);
-      const map = useReverse ? reverse : forward;
+
+      const candidates = [
+        // Common ofish / office Word (LTR cells, row on the right)
+        { phone: 0, nationalId: 1, birth: 2, role: 3, name: 4, row: 5 },
+        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
+        // Older app export with bidiVisual logical order
+        { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4, role: -1 },
+        // New app export without bidiVisual (ofish order, no role)
+        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
+      ];
+      let best = null;
+      let bestScore = -1;
+      for (const map of candidates) {
+        const idxs = Object.values(map).filter((v) => v >= 0);
+        if (Math.max(...idxs) >= texts.length) continue;
+        const score = scoreSortedColumnMap(texts, map);
+        if (score > bestScore) {
+          bestScore = score;
+          best = map;
+        }
+      }
+      const map = best || candidates[0];
+      const pick = (key) => (map[key] >= 0 ? (texts[map[key]] || "") : "");
       return {
-        row: texts[map.row] || "",
-        name: texts[map.name] || "",
-        birthDate: texts[map.birth] || "",
-        nationalId: texts[map.nationalId] || "",
-        phone: texts[map.phone] || "",
+        row: pick("row"),
+        name: pick("name"),
+        birthDate: pick("birth"),
+        nationalId: pick("nationalId"),
+        phone: pick("phone"),
+        role: pick("role"),
       };
     }
 
@@ -2033,7 +2070,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       let headerMap = null;
       rows.forEach((tr, index) => {
         const cells = [...tr.children].filter((el) => el.localName === "tc");
-        if (cells.length < 5) return;
+        if (cells.length < 4) return;
         const texts = cells.map((tc) => stripDirectionalMarks(exactCellText(tc)));
         if (isSortedPeopleHeader(texts)) {
           headerMap = detectSortedColumnMap(texts) || headerMap;
@@ -2046,14 +2083,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if (!normalizeLabel(name)) return;
         if (isHeaderLabel(name)) return;
 
+        const role = fields.role === "—" ? "" : (fields.role || "");
+        const birthDate = fields.birthDate === "—" ? "" : (fields.birthDate || "");
+        const nationalId = fields.nationalId === "—" ? "" : (fields.nationalId || "");
+        const phone = fields.phone === "—" ? "" : (fields.phone || "");
+
         people.push({
-          id: `${sourceFile}::sorted::${fields.row || index}::${name}::${fields.nationalId}::${fields.phone}::${index}`,
+          id: `${sourceFile}::sorted::${fields.row || index}::${name}::${nationalId}::${phone}::${index}`,
           row: String(fields.row || index),
           name,
-          role: "",
-          birthDate: fields.birthDate === "—" ? "" : fields.birthDate,
-          nationalId: fields.nationalId === "—" ? "" : fields.nationalId,
-          phone: fields.phone === "—" ? "" : fields.phone,
+          role,
+          birthDate,
+          nationalId,
+          phone,
           sourceFile,
           sectionIds: [],
           registeredAt: null,
@@ -2062,10 +2104,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           sourceSnapshot: {
             row: String(fields.row || index),
             name,
-            role: "",
-            birthDate: fields.birthDate === "—" ? "" : fields.birthDate,
-            nationalId: fields.nationalId === "—" ? "" : fields.nationalId,
-            phone: fields.phone === "—" ? "" : fields.phone,
+            role,
+            birthDate,
+            nationalId,
+            phone,
             sourceFile,
           },
         });
@@ -2075,21 +2117,43 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     function parseSortedDocxXml(xmlText, sourceFile) {
       const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+      if (doc.getElementsByTagName("parsererror").length) {
+        throw new Error(`XML نامعتبر است: ${sourceFile}`);
+      }
       const body = [...doc.getElementsByTagNameNS(W_NS, "body")][0];
       if (!body) return [];
 
+      const blocks = [];
+      const visit = (el) => {
+        for (const child of [...el.children]) {
+          if (child.localName === "p" || child.localName === "tbl") {
+            blocks.push(child);
+            continue;
+          }
+          if (child.localName === "sdt") {
+            const content = [...child.getElementsByTagNameNS(W_NS, "sdtContent")][0];
+            if (content) visit(content);
+            continue;
+          }
+          // Dive into other wrappers, but do not flatten nested tables inside cells
+          if (!["tr", "tc", "r", "t", "tblPr", "tblGrid", "trPr", "tcPr"].includes(child.localName)) {
+            visit(child);
+          }
+        }
+      };
+      visit(body);
+
       const groups = [];
       let currentTitle = "";
-
-      for (const child of [...body.children]) {
-        if (child.localName === "p") {
-          const text = normalizeLabel(stripDirectionalMarks(exactCellText(child)));
+      for (const block of blocks) {
+        if (block.localName === "p") {
+          const text = normalizeLabel(stripDirectionalMarks(exactCellText(block)));
           if (!text || isSkippedSortedHeading(text)) continue;
           currentTitle = text;
           continue;
         }
-        if (child.localName !== "tbl") continue;
-        const people = parseSortedTablePeople(child, sourceFile);
+        if (block.localName !== "tbl") continue;
+        const people = parseSortedTablePeople(block, sourceFile);
         if (!people.length) continue;
         groups.push({
           title: currentTitle || "بدون عنوان",
@@ -3962,46 +4026,62 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     function importSortedGroups(groups, { rootParentId = null, sourceFiles = [] } = {}) {
       const registeredAt = nowIso();
       let addedPeople = 0;
-      let linkedPeople = 0;
-      let sectionCount = 0;
-      const beforeSections = state.sections.length;
+      let updatedPeople = 0;
+      const beforePeople = state.people.length;
 
       for (const group of groups) {
-        const isUnassignedGroup = normalizeLabel(group.title) === "بدون بخش"
-          || normalizeLabel(group.title) === "بدون عنوان";
-        const section = isUnassignedGroup
-          ? null
-          : ensureSectionPath(group.title, rootParentId);
+        const groupTitle = normalizeLabel(group.title);
+        const isUnassignedGroup = !groupTitle
+          || groupTitle === "بدون بخش"
+          || groupTitle === "بدون عنوان";
 
         for (const incoming of group.people || []) {
           incoming.sortedImport = true;
           incoming.sourceFile = incoming.sourceFile || sourceFiles[0] || "ورود تفکیک‌شده";
+          // Keep in remaining list; use section title as role so later «تفکیک همه» works.
+          if (!normalizeLabel(incoming.role) && !isUnassignedGroup) {
+            incoming.role = groupTitle;
+          }
+          incoming.sectionIds = [];
+          incoming.assignedAt = null;
+          incoming.suggestedSection = isUnassignedGroup ? "" : groupTitle;
+          if (rootParentId && incoming.suggestedSection) {
+            incoming.suggestedSectionRoot = rootParentId;
+          }
+          ensureSourceSnapshot(incoming);
+          if (incoming.sourceSnapshot && !incoming.sourceSnapshot.role) {
+            incoming.sourceSnapshot.role = incoming.role || "";
+          }
 
           const existing = state.people.find((p) => identityKey(p) === identityKey(incoming))
             || state.people.find((p) => personKey(p) === personKey(incoming));
 
           if (existing) {
             existing.sortedImport = true;
-            if (!existing.sourceSnapshot) ensureSourceSnapshot(existing);
-            if (section) {
-              const added = addPersonToSection(existing, section.id);
-              if (added) linkedPeople += 1;
+            if (!normalizeLabel(existing.role) && normalizeLabel(incoming.role)) {
+              existing.role = incoming.role;
             }
+            if (!existing.sourceSnapshot) ensureSourceSnapshot(existing);
+            // Stay/return to remaining list for manual/auto sort later
+            assignPerson(existing, UNASSIGNED);
+            updatedPeople += 1;
             continue;
           }
 
           incoming.registeredAt = registeredAt;
-          incoming.assignedAt = null;
-          incoming.sectionIds = [];
-          ensureSourceSnapshot(incoming);
-          if (section) addPersonToSection(incoming, section.id);
           state.people.push(incoming);
           addedPeople += 1;
         }
       }
 
-      sectionCount = Math.max(0, state.sections.length - beforeSections);
-      return { addedPeople, linkedPeople, sectionCount, groupCount: groups.length };
+      return {
+        addedPeople,
+        updatedPeople,
+        linkedPeople: 0,
+        sectionCount: 0,
+        groupCount: groups.length,
+        totalPeople: state.people.length - beforePeople + addedPeople,
+      };
     }
 
     async function handleSortedImportFiles(fileList) {
@@ -4016,8 +4096,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const errors = [];
       for (const file of files) {
         try {
-          const groups = await readSortedDocxFile(file);
-          allGroups.push(...groups);
+          let groups = await readSortedDocxFile(file);
+          // Fallback: if not recognized as sorted layout, read as normal ofish table(s)
+          if (!groups.length) {
+            const plain = await readDocxFile(file);
+            if (plain.length) {
+              groups = [{
+                title: "بدون عنوان",
+                people: plain.map((p) => ({
+                  ...p,
+                  sortedImport: true,
+                  sectionIds: [],
+                  assignedAt: null,
+                })),
+              }];
+            }
+          }
+          if (!groups.length) {
+            errors.push(`${file.name}: جدول نفرات پیدا نشد`);
+          } else {
+            allGroups.push(...groups);
+          }
           await new Promise((resolve) => setTimeout(resolve, 0));
         } catch (err) {
           console.error(err);
@@ -4030,7 +4129,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         setStatus(
           errors.length
             ? `خطا در خواندن فایل‌ها — ${errors.slice(0, 3).join(" | ")}${errors.length > 3 ? ` | و ${errors.length - 3} مورد دیگر` : ""}`
-            : "در فایل تفکیک‌شده بخشی پیدا نشد.",
+            : "در فایل تفکیک‌شده فردی پیدا نشد.",
           "error"
         );
         return;
@@ -4045,11 +4144,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const saved = await persistBackupReliable();
       render();
       setStatus(
-        `${result.addedPeople} نفر جدید + ${result.linkedPeople} اتصال به بخش | ${result.sectionCount} بخش جدید از روی فایل تفکیک‌شده` +
-          (saved ? " | بک‌آپ ذخیره شد" : " | بک‌آپ ذخیره نشد"),
+        `${result.addedPeople} نفر به باقیمانده اضافه شد` +
+          (result.updatedPeople ? ` | ${result.updatedPeople} نفر به‌روز شد` : "") +
+          ` | از ${result.groupCount} گروه` +
+          (saved ? " | بک‌آپ ذخیره شد" : " | بک‌آپ ذخیره نشد") +
+          " — حالا «تفکیک همه در بخش‌ها» را بزنید",
         saved ? "ok" : "error"
       );
-      toast(saved ? "ورود تفکیک‌شده انجام شد" : "ورود انجام شد ولی بک‌آپ خودکار ذخیره نشد");
+      toast(saved
+        ? `${result.addedPeople} نفر در لیست باقیمانده آماده تفکیک است`
+        : "ورود انجام شد ولی بک‌آپ خودکار ذخیره نشد");
       if (errors.length) setStatus(`برخی فایل‌ها خطا داشتند: ${errors.join("، ")}`, "error");
     }
 
@@ -4232,21 +4336,29 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     function wordPeopleTable(members) {
-      // With bidiVisual, first cell is rightmost: ردیف | نام | تاریخ تولد | کد ملی | تلفن
-      const widths = [900, 3200, 1800, 2000, 2000];
-      const headers = ["ردیف", "نام و نام خانوادگی", "تاریخ تولد", "کد ملی", "تلفن"];
+      // Match common Persian ofish Word tables (no bidiVisual):
+      // left → right: تلفن | کد ملی | تاریخ تولد | نام و نام خانوادگی | ردیف
+      // so «ردیف» sits on the right edge like office files.
+      const widths = [2000, 2000, 1800, 3200, 900];
+      const headers = ["تلفن", "کد ملی", "تاریخ تولد", "نام و نام خانوادگی", "ردیف"];
       const headerRow = `
         <w:tr>
-          ${headers.map((title, i) => wordTableCell(title, { width: widths[i], header: true, bold: true })).join("")}
+          ${headers.map((title, i) => wordTableCell(title, {
+            width: widths[i],
+            header: true,
+            bold: true,
+            align: "center",
+            ltr: i !== 3,
+          })).join("")}
         </w:tr>`;
 
       const bodyRows = members.map((person, index) => {
         const values = [
-          { text: String(index + 1), ltr: true, align: "center", bold: false },
-          { text: person.name || "—", ltr: false, align: "center", bold: true },
-          { text: person.birthDate || "—", ltr: true, align: "center", bold: false },
-          { text: person.nationalId || "—", ltr: true, align: "center", bold: false },
           { text: person.phone || "—", ltr: true, align: "center", bold: false },
+          { text: person.nationalId || "—", ltr: true, align: "center", bold: false },
+          { text: person.birthDate || "—", ltr: true, align: "center", bold: false },
+          { text: person.name || "—", ltr: false, align: "center", bold: true },
+          { text: String(index + 1), ltr: true, align: "center", bold: false },
         ];
         return `
           <w:tr>
@@ -4265,7 +4377,6 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             <w:tblStyle w:val="TableGrid"/>
             <w:tblW w:w="${widths.reduce((a, b) => a + b, 0)}" w:type="dxa"/>
             <w:jc w:val="center"/>
-            <w:bidiVisual/>
             <w:tblBorders>
               <w:top w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
               <w:left w:val="single" w:sz="8" w:space="0" w:color="8AA899"/>
