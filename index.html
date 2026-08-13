@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۱۸</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۱۹</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1149,7 +1149,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           <div class="empty">بعد از بارگذاری فایل، اسامی اینجا می‌آیند.</div>
         </div>
         <div class="toolbar">
-          <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش خودکار بر اساس سمت</button>
+          <button type="button" id="sortAllToSectionsBtn" disabled title="ساخت بخش از روی سمت‌ها و قرار دادن دقیق همه افراد در بخش خودشان">تفکیک همه در بخش‌ها</button>
+          <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش باقیمانده‌ها بر اساس سمت</button>
           <button type="button" class="ghost" id="unassignAllBtn" disabled>خروج از همه بخش‌ها</button>
           <button type="button" class="danger" id="clearPeopleBtn" disabled>پاک‌کردن لیست</button>
         </div>
@@ -1322,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۱۸: JSZip داخلی برای خواندن ورد بدون CDN
-    const APP_VERSION = 18;
+    // نسخه ۱۹: دکمه تفکیک همه افراد در بخش‌های خودشان
+    const APP_VERSION = 19;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1360,6 +1361,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       addSectionBtn: document.getElementById("addSectionBtn"),
       sectionsFromRolesBtn: document.getElementById("sectionsFromRolesBtn"),
       autoAssignBtn: document.getElementById("autoAssignBtn"),
+      sortAllToSectionsBtn: document.getElementById("sortAllToSectionsBtn"),
       unassignAllBtn: document.getElementById("unassignAllBtn"),
       clearPeopleBtn: document.getElementById("clearPeopleBtn"),
       exportWordBtn: document.getElementById("exportWordBtn"),
@@ -3267,6 +3269,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       els.sectionsMeta.textContent = `${state.sections.length} بخش`;
 
       els.autoAssignBtn.disabled = !unassignedCount;
+      if (els.sortAllToSectionsBtn) {
+        els.sortAllToSectionsBtn.disabled = !hasPeople;
+      }
       els.unassignAllBtn.disabled = !assignedCount;
       els.clearPeopleBtn.disabled = !hasPeople;
       els.sectionsFromRolesBtn.disabled = !hasPeople;
@@ -3698,7 +3703,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <w:themeFontLang w:val="fa-IR" w:eastAsia="en-US" w:bidi="fa-IR"/>
 </w:settings>`;
 
-      const zip = new JSZip();
+      const Zip = await ensureJSZip();
+      const zip = new Zip();
       zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -4045,6 +4051,69 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       );
       toast(saved ? "ورود تفکیک‌شده انجام شد" : "ورود انجام شد ولی بک‌آپ خودکار ذخیره نشد");
       if (errors.length) setStatus(`برخی فایل‌ها خطا داشتند: ${errors.join("، ")}`, "error");
+    }
+
+    function placePersonExactlyByRole(person) {
+      const role = normalizeLabel(person.role || "");
+      if (!role) return { ok: false, reason: "empty-role" };
+
+      let section = null;
+      let created = false;
+      const beforeCount = state.sections.length;
+
+      // Role may already be a path like «مدیر عامل » سپاه»
+      if (role.includes("»")) {
+        section = ensureSectionPath(role);
+        created = state.sections.length > beforeCount;
+      }
+      if (!section) {
+        section = findSectionForRole(role);
+      }
+      if (!section) {
+        section = addSection(role, { silent: true });
+        created = Boolean(section) && state.sections.length > beforeCount;
+      }
+      if (!section) return { ok: false, reason: "no-section" };
+
+      const ids = getSectionIds(person);
+      const alreadyExact = ids.length === 1 && ids[0] === section.id;
+      if (alreadyExact) {
+        return { ok: true, section, created, already: true };
+      }
+
+      // Exact placement: only in the matching section
+      assignPerson(person, section.id);
+      return { ok: true, section, created, already: false };
+    }
+
+    function sortAllPeopleIntoSections() {
+      let createdSections = 0;
+      let placed = 0;
+      let already = 0;
+      let skippedNoRole = 0;
+
+      for (const role of uniqueRoles()) {
+        const before = state.sections.length;
+        if (normalizeLabel(role.title).includes("»")) {
+          ensureSectionPath(role.title);
+        } else {
+          addSection(role.title, { silent: true });
+        }
+        createdSections += Math.max(0, state.sections.length - before);
+      }
+
+      for (const person of state.people) {
+        const result = placePersonExactlyByRole(person);
+        if (!result.ok) {
+          if (result.reason === "empty-role") skippedNoRole += 1;
+          continue;
+        }
+        if (result.already) already += 1;
+        else placed += 1;
+        if (result.created) createdSections += 1;
+      }
+
+      return { createdSections, placed, already, skippedNoRole };
     }
 
     function assignByRole(person) {
@@ -4766,8 +4835,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       toast(`${created} بخش از روی سمت‌ها ساخته شد`);
     });
 
+    els.sortAllToSectionsBtn.addEventListener("click", () => {
+      const withRole = state.people.filter((p) => normalizeLabel(p.role)).length;
+      if (!withRole) {
+        toast("هیچ‌کس سمت ندارد؛ اول فایل ورد را وارد کنید یا سمت بدهید");
+        return;
+      }
+      if (!confirm(`همه افراد دارای سمت (${withRole} نفر) دقیقاً در بخش هم‌نام سمت خودشان قرار بگیرند؟`)) return;
+      const result = withChange("تفکیک همه در بخش‌ها", () => sortAllPeopleIntoSections());
+      const bits = [];
+      if (result.placed) bits.push(`${result.placed} نفر در بخش خودشان قرار گرفتند`);
+      if (result.already) bits.push(`${result.already} نفر از قبل درست بودند`);
+      if (result.createdSections) bits.push(`${result.createdSections} بخش ساخته شد`);
+      if (result.skippedNoRole) bits.push(`${result.skippedNoRole} نفر بدون سمت ماندند`);
+      toast(bits.join(" | ") || "تغییری لازم نبود");
+      setStatus(bits.join(" | ") || "تفکیک انجام شد", result.skippedNoRole && !result.placed ? "error" : "ok");
+    });
+
     els.autoAssignBtn.addEventListener("click", () => {
-      const count = withChange("چینش خودکار", () => {
+      const count = withChange("چینش باقیمانده‌ها", () => {
         let n = 0;
         for (const person of state.people) {
           if (getSectionIds(person).length) continue;
@@ -4776,7 +4862,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         }
         return n;
       });
-      toast(count ? `${count} نفر در بخش مربوط به سمت‌شان قرار گرفتند` : "مورد جدیدی برای چینش خودکار نبود");
+      toast(count ? `${count} نفر باقیمانده در بخش مربوط به سمت‌شان قرار گرفتند` : "مورد جدیدی برای چینش نبود");
     });
 
     els.unassignAllBtn.addEventListener("click", () => {
