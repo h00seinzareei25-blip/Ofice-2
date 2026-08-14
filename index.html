@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۴</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۵</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1323,8 +1323,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۴: ستون «سمت» در خروجی Word (به‌جای فایل ورود)
-    const APP_VERSION = 24;
+    // نسخه ۲۵: بخش تکراری ساخته نشود؛ تفکیک همه در یک بخش هم‌نام سمت
+    const APP_VERSION = 25;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1734,8 +1734,21 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     function normalizeLabel(value) {
       return String(value || "")
-        .replace(/\u200c/g, "\u200c")
+        .replace(/[\u200c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, " ")
         .replace(/[\r\n\t]+/g, " ")
+        .replace(/ +/g, " ")
+        .trim();
+    }
+
+    // Canonical key for matching roles/section titles (Arabic/Persian variants, digits)
+    function sectionKey(value) {
+      return toEnglishDigits(normalizeLabel(value))
+        .replace(/ي/g, "ی")
+        .replace(/ك/g, "ک")
+        .replace(/ة/g, "ه")
+        .replace(/ؤ/g, "و")
+        .replace(/أ|إ|آ/g, "ا")
+        .replace(/[^\u0600-\u06FFa-zA-Z0-9]+/g, " ")
         .replace(/ +/g, " ")
         .trim();
     }
@@ -2641,12 +2654,91 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     function findSectionByTitle(title, parentId = undefined) {
-      const normalized = normalizeLabel(title);
+      const key = sectionKey(title);
+      if (!key) return null;
       return state.sections.find((s) => {
-        if (normalizeLabel(s.title) !== normalized) return false;
+        if (sectionKey(s.title) !== key) return false;
         if (parentId === undefined) return true;
         return (s.parentId || "") === (parentId || "");
-      });
+      }) || null;
+    }
+
+    function findCanonicalSectionByTitle(title) {
+      const key = sectionKey(title);
+      if (!key) return null;
+      const matches = state.sections.filter((s) => sectionKey(s.title) === key);
+      if (!matches.length) return null;
+      if (matches.length === 1) return matches[0];
+      // Prefer root, then most members, then shallowest, then stable id
+      return matches.slice().sort((a, b) => {
+        const ap = a.parentId ? 1 : 0;
+        const bp = b.parentId ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        const ac = peopleInSection(a.id).length;
+        const bc = peopleInSection(b.id).length;
+        if (ac !== bc) return bc - ac;
+        const ad = sectionDepth(a);
+        const bd = sectionDepth(b);
+        if (ad !== bd) return ad - bd;
+        return String(a.id).localeCompare(String(b.id));
+      })[0];
+    }
+
+    function mergeDuplicateSections() {
+      const groups = new Map();
+      for (const section of state.sections) {
+        const key = sectionKey(section.title);
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(section);
+      }
+
+      let merged = 0;
+      for (const [, group] of groups) {
+        if (group.length < 2) continue;
+        const keeper = findCanonicalSectionByTitle(group[0].title);
+        if (!keeper) continue;
+        const dupeIds = group.map((s) => s.id).filter((id) => id !== keeper.id);
+        for (const dupeId of dupeIds) {
+          const dupe = state.sections.find((s) => s.id === dupeId);
+          if (!dupe) continue;
+          for (const person of state.people) {
+            const ids = getSectionIds(person);
+            if (!ids.includes(dupeId)) continue;
+            person.sectionIds = [keeper.id];
+            removeFromSectionOrder(dupeId, person.id);
+            appendToSectionOrder(keeper.id, person.id);
+            if (!person.assignedAt) person.assignedAt = nowIso();
+          }
+          for (const child of state.sections) {
+            if (child.parentId === dupeId) {
+              child.parentId = child.id === keeper.id ? null : keeper.id;
+            }
+          }
+          if (keeper.parentId === dupeId) keeper.parentId = dupe.parentId || null;
+          if (keeper.parentId === keeper.id) keeper.parentId = null;
+          state.sections = state.sections.filter((s) => s.id !== dupeId);
+          merged += 1;
+        }
+        keeper.title = normalizeLabel(keeper.title) || keeper.title;
+      }
+
+      state.sections.forEach(normalizeSection);
+      return merged;
+    }
+
+    function ensureRoleSection(roleTitle) {
+      const clean = normalizeLabel(roleTitle);
+      if (!clean) return null;
+      if (clean.includes("»")) {
+        const before = state.sections.length;
+        const leaf = ensureSectionPath(clean);
+        mergeDuplicateSections();
+        return leaf ? findCanonicalSectionByTitle(leaf.title) || leaf : null;
+      }
+      const existing = findCanonicalSectionByTitle(clean);
+      if (existing) return existing;
+      return addSection(clean, { silent: true, parentId: null, allowGlobalReuse: true });
     }
 
     function normalizeSection(section) {
@@ -2777,25 +2869,34 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const clean = normalizeLabel(role);
       if (!clean) return null;
 
-      const exact = findSectionByTitle(clean);
+      // Path role: resolve leaf, but still de-dupe by title
+      if (clean.includes("»")) {
+        const parts = clean.split(SECTION_PATH_SEP).map((p) => normalizeLabel(p)).filter(Boolean);
+        const leafTitle = parts[parts.length - 1];
+        const byLeaf = findCanonicalSectionByTitle(leafTitle);
+        if (byLeaf) return byLeaf;
+      }
+
+      const exact = findCanonicalSectionByTitle(clean);
       if (exact) return exact;
 
+      const roleKey = sectionKey(clean);
       // Soft match: prefer longest section title contained in the role text
       const contained = state.sections
-        .map((section) => ({ section, title: normalizeLabel(section.title) }))
-        .filter(({ title }) => title && (clean === title || clean.includes(title) || title.includes(clean)))
-        .sort((a, b) => b.title.length - a.title.length);
+        .map((section) => ({ section, title: normalizeLabel(section.title), key: sectionKey(section.title) }))
+        .filter(({ key }) => key && (roleKey === key || roleKey.includes(key) || key.includes(roleKey)))
+        .sort((a, b) => b.key.length - a.key.length);
 
       if (!contained.length) return null;
-      // If multiple same-length, require unique best match
       const best = contained[0];
-      const ties = contained.filter((item) => item.title.length === best.title.length);
+      const ties = contained.filter((item) => item.key.length === best.key.length);
       if (ties.length === 1) return best.section;
-      // Prefer exact containment of role in title or vice-versa with single unique winner
-      const strict = contained.filter(({ title }) => clean.includes(title));
+      const strict = contained.filter(({ key }) => roleKey.includes(key));
       if (strict.length === 1) return strict[0].section;
-      if (strict.length > 1) return strict.sort((a, b) => b.title.length - a.title.length)[0].section;
-      return best.section;
+      if (strict.length > 1) {
+        return findCanonicalSectionByTitle(strict.sort((a, b) => b.key.length - a.key.length)[0].title);
+      }
+      return findCanonicalSectionByTitle(best.title) || best.section;
     }
 
     function peopleInSection(sectionId) {
@@ -2873,10 +2974,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       for (const person of state.people) {
         const role = normalizeLabel(person.role || "");
         if (!role) continue;
-        if (!map.has(role)) map.set(role, 0);
-        map.set(role, map.get(role) + 1);
+        const key = sectionKey(role);
+        if (!key) continue;
+        const prev = map.get(key);
+        if (!prev) {
+          map.set(key, { title: role, count: 1 });
+        } else {
+          prev.count += 1;
+          // Prefer shorter/cleaner display title
+          if (role.length < prev.title.length) prev.title = role;
+        }
       }
-      return [...map.entries()].map(([title, count]) => ({ title, count }));
+      return [...map.values()];
     }
 
     function formatDateTime(iso) {
@@ -3229,6 +3338,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           : captureSourceSnapshot(person);
       }
       canonicalizePersonBirthDates(state.people);
+      mergeDuplicateSections();
       state.lastCheck = payload.lastCheck || null;
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
     }
@@ -4037,7 +4147,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       toast(`خروجی Word بخش «${sectionPathLabel(section)}» ذخیره شد`);
     }
 
-    function addSection(title, { silent = false, parentId = null } = {}) {
+    function addSection(title, { silent = false, parentId = null, allowGlobalReuse = true } = {}) {
       const clean = normalizeLabel(title);
       if (!clean) {
         if (!silent) toast("نام بخش را وارد کنید");
@@ -4048,10 +4158,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         if (!silent) toast("بخش والد پیدا نشد");
         return null;
       }
-      const existing = findSectionByTitle(clean, parentId || null);
-      if (existing) {
-        if (!silent) toast("زیر این مجموعه، بخشی با این نام هست");
-        return existing;
+      // Never create a second section with the same title (e.g. two «دکتر»)
+      if (allowGlobalReuse) {
+        const global = findCanonicalSectionByTitle(clean);
+        if (global) {
+          if (!silent) toast("بخشی با این نام از قبل هست");
+          return global;
+        }
+      } else {
+        const existing = findSectionByTitle(clean, parentId || null);
+        if (existing) {
+          if (!silent) toast("زیر این مجموعه، بخشی با این نام هست");
+          return existing;
+        }
       }
       const section = normalizeSection({
         id: uid("sec"),
@@ -4225,23 +4344,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const role = normalizeLabel(person.role || "");
       if (!role) return { ok: false, reason: "empty-role" };
 
-      let section = null;
-      let created = false;
       const beforeCount = state.sections.length;
-
-      // Role may already be a path like «مدیر عامل » سپاه»
-      if (role.includes("»")) {
-        section = ensureSectionPath(role);
-        created = state.sections.length > beforeCount;
-      }
-      if (!section) {
-        section = findSectionForRole(role);
-      }
-      if (!section) {
-        section = addSection(role, { silent: true });
-        created = Boolean(section) && state.sections.length > beforeCount;
-      }
+      const section = ensureRoleSection(role);
       if (!section) return { ok: false, reason: "no-section" };
+      const created = state.sections.length > beforeCount;
+
+      // Keep role text aligned with the canonical section title
+      if (sectionKey(person.role) === sectionKey(section.title)) {
+        person.role = section.title;
+      }
 
       const ids = getSectionIds(person);
       const alreadyExact = ids.length === 1 && ids[0] === section.id;
@@ -4259,29 +4370,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       let placed = 0;
       let already = 0;
       let skippedNoRole = 0;
+      let mergedSections = mergeDuplicateSections();
 
       for (const role of uniqueRoles()) {
         const before = state.sections.length;
-        if (normalizeLabel(role.title).includes("»")) {
-          ensureSectionPath(role.title);
-        } else {
-          addSection(role.title, { silent: true });
-        }
+        ensureRoleSection(role.title);
         createdSections += Math.max(0, state.sections.length - before);
       }
 
+      mergedSections += mergeDuplicateSections();
+
       for (const person of state.people) {
+        const before = state.sections.length;
         const result = placePersonExactlyByRole(person);
+        createdSections += Math.max(0, state.sections.length - before);
         if (!result.ok) {
           if (result.reason === "empty-role") skippedNoRole += 1;
           continue;
         }
         if (result.already) already += 1;
         else placed += 1;
-        if (result.created) createdSections += 1;
       }
 
-      return { createdSections, placed, already, skippedNoRole };
+      mergedSections += mergeDuplicateSections();
+      return { createdSections, placed, already, skippedNoRole, mergedSections };
     }
 
     function assignByRole(person) {
@@ -4296,15 +4408,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     function placePersonByRole(person) {
       const role = normalizeLabel(person.role || "");
       if (!role) return { ok: false, reason: "empty-role" };
-      let section = findSectionForRole(role);
-      let created = false;
-      if (!section) {
-        section = addSection(role, { silent: true });
-        created = true;
-      }
+      const before = state.sections.length;
+      const section = ensureRoleSection(role);
       if (!section) return { ok: false, reason: "no-section" };
+      const created = state.sections.length > before;
+      if (sectionKey(person.role) === sectionKey(section.title)) {
+        person.role = section.title;
+      }
       const already = getSectionIds(person).includes(section.id);
-      if (!already) addPersonToSection(person, section.id);
+      if (!already) assignPerson(person, section.id);
       return { ok: true, section, created, already };
     }
 
@@ -4976,8 +5088,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         toast("نام بخش را وارد کنید");
         return;
       }
-      if (findSectionByTitle(title, parentId)) {
-        toast(parentId ? "زیر این مجموعه، بخشی با این نام هست" : "این بخش اصلی از قبل وجود دارد");
+      if (findCanonicalSectionByTitle(title)) {
+        toast("بخشی با این نام از قبل هست");
         return;
       }
       const section = withChange("افزودن بخش", () => addSection(title, { parentId }));
@@ -5002,11 +5114,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
       const created = withChange("ساخت بخش از سمت‌ها", () => {
         let count = 0;
+        mergeDuplicateSections();
         for (const role of roles) {
           const before = state.sections.length;
-          addSection(role.title, { silent: true });
+          ensureRoleSection(role.title);
           if (state.sections.length > before) count += 1;
         }
+        mergeDuplicateSections();
         return count;
       });
       toast(`${created} بخش از روی سمت‌ها ساخته شد`);
@@ -5018,12 +5132,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         toast("هیچ‌کس سمت ندارد؛ اول فایل ورد را وارد کنید یا سمت بدهید");
         return;
       }
-      if (!confirm(`همه افراد دارای سمت (${withRole} نفر) دقیقاً در بخش هم‌نام سمت خودشان قرار بگیرند؟`)) return;
+      if (!confirm(`همه افراد دارای سمت (${withRole} نفر) دقیقاً در بخش هم‌نام سمت خودشان قرار بگیرند؟\nبخش‌های تکراری ادغام می‌شوند.`)) return;
       const result = withChange("تفکیک همه در بخش‌ها", () => sortAllPeopleIntoSections());
       const bits = [];
       if (result.placed) bits.push(`${result.placed} نفر در بخش خودشان قرار گرفتند`);
       if (result.already) bits.push(`${result.already} نفر از قبل درست بودند`);
       if (result.createdSections) bits.push(`${result.createdSections} بخش ساخته شد`);
+      if (result.mergedSections) bits.push(`${result.mergedSections} بخش تکراری ادغام شد`);
       if (result.skippedNoRole) bits.push(`${result.skippedNoRole} نفر بدون سمت ماندند`);
       toast(bits.join(" | ") || "تغییری لازم نبود");
       setStatus(bits.join(" | ") || "تفکیک انجام شد", result.skippedNoRole && !result.placed ? "error" : "ok");
@@ -5291,8 +5406,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           toast("نام زیرمجموعه نمی‌تواند خالی باشد");
           return;
         }
-        if (findSectionByTitle(next, parentId)) {
-          toast("زیر این مجموعه، بخشی با این نام هست");
+        if (findCanonicalSectionByTitle(next)) {
+          toast("بخشی با این نام از قبل هست");
           return;
         }
         const section = withChange("افزودن زیرمجموعه", () => addSection(next, { parentId }));
@@ -5312,9 +5427,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           toast("نام بخش نمی‌تواند خالی باشد");
           return;
         }
-        const clash = findSectionByTitle(clean, section.parentId || null);
+        const clash = findCanonicalSectionByTitle(clean);
         if (clash && clash.id !== section.id) {
-          toast("زیر همین مجموعه، بخشی با این نام هست");
+          toast("بخشی با این نام از قبل هست");
           return;
         }
         withChange("تغییر نام بخش", () => {
