@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۶</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۷</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1324,8 +1324,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۶: ترمیم جابجایی/خراب‌شدن کد ملی و تلفن + نگه‌داشتن sourceSnapshot در بک‌آپ
-    const APP_VERSION = 26;
+    // نسخه ۲۷: اصلاح خروجی Word — ارقام کد ملی/تلفن مثل فایل افیش (بدون LRE که برعکس می‌کرد)
+    const APP_VERSION = 27;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -2000,17 +2000,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     function wordSafeLtrText(value) {
-      // LRE…PDF keeps digit runs (dates, phone, national id) from flipping in RTL Word
-      const text = stripDirectionalMarks(String(value ?? "").trim() || "—");
-      return `\u202A${text}\u202C`;
+      // Plain text only — Unicode LRE/PDF inside Word RTL docs often REVERSES digits
+      return stripDirectionalMarks(String(value ?? "").trim() || "—");
     }
 
-    function wordSafeDigitField(value) {
-      // Export identity digits in English + strong LTR marks to avoid RTL scramble
+    function wordExportDigitText(value) {
+      // Keep digits as stored (Persian or English), strip any leftover bidi marks
       const raw = stripDirectionalMarks(String(value ?? "").trim());
-      if (!raw || raw === "—" || raw === "-") return wordSafeLtrText("—");
-      const digits = toEnglishDigits(raw);
-      return `\u202A\u200E${digits}\u200E\u202C`;
+      if (!raw || raw === "—" || raw === "-") return "—";
+      return raw;
     }
 
     function findTrustedIdentitySource(person) {
@@ -4665,15 +4663,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return blocks.join("\n\n");
     }
 
-    function wordRunProps({ bold = false, size = 22, rtl = true } = {}) {
-      // Avoid run-level <w:rtl/>: with paragraph bidi it can reverse Persian glyphs
-      // in Word/WPS. Arabic script + paragraph bidi is enough for correct display.
+    function wordRunProps({ bold = false, size = 22, rtl = true, digitField = false } = {}) {
+      // Ofish office files put phone/national-id in RTL runs with <w:rtl/>.
+      // Unicode LRE marks + LTR paragraphs were reversing those digits in Word/WPS.
+      // Persian name cells stay without run-level rtl (avoids glyph flip).
+      const useRtlMark = digitField || false;
+      const complex = rtl || digitField;
       return `
         <w:rPr>
-          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma" w:hint="${rtl ? "cs" : "default"}"/>
+          <w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma" w:eastAsia="Tahoma" w:hint="${complex ? "cs" : "default"}"/>
           ${bold ? "<w:b/><w:bCs/>" : ""}
+          ${useRtlMark ? "<w:rtl/>" : ""}
           <w:sz w:val="${size}"/><w:szCs w:val="${size}"/>
-          <w:lang w:val="${rtl ? "fa-IR" : "en-US"}" w:eastAsia="en-US" w:bidi="fa-IR"/>
+          <w:lang w:val="${complex ? "fa-IR" : "en-US"}" w:eastAsia="en-US" w:bidi="fa-IR"/>
         </w:rPr>`;
     }
 
@@ -4681,7 +4683,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const rPr = wordRunProps({ bold, size, rtl: !ltr });
       const lines = String(text ?? "").split(/\n/);
       const runs = lines.map((line, index) => {
-        const safe = xmlEscape(line);
+        const safe = xmlEscape(stripDirectionalMarks(line));
         const br = index < lines.length - 1 ? `<w:br/>` : "";
         return `
           <w:r>
@@ -4695,21 +4697,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           <w:pPr>
             <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}"/>
             <w:jc w:val="${align}"/>
-            ${ltr ? "" : "<w:bidi/>"}
+            ${ltr ? '<w:bidi w:val="0"/>' : "<w:bidi/>"}
           </w:pPr>
           ${runs}
         </w:p>`;
     }
 
-    function wordCellParagraph(text, { bold = false, size = 18, align = "center", header = false, ltr = false } = {}) {
-      const rPr = wordRunProps({ bold: bold || header, size, rtl: !ltr });
-      const safe = xmlEscape(text || "—");
+    function wordCellParagraph(text, { bold = false, size = 18, align = "center", header = false, ltr = false, digitField = false } = {}) {
+      const rPr = wordRunProps({ bold: bold || header, size, rtl: !ltr, digitField });
+      const safe = xmlEscape(stripDirectionalMarks(text || "—"));
+      // Digit fields follow ofish: paragraph bidi + run rtl (no Unicode embeddings)
+      const bidi = digitField || !ltr ? "<w:bidi/>" : '<w:bidi w:val="0"/>';
       return `
         <w:p>
           <w:pPr>
             <w:spacing w:before="40" w:after="40"/>
             <w:jc w:val="${align}"/>
-            ${ltr ? "" : "<w:bidi/>"}
+            ${bidi}
           </w:pPr>
           <w:r>
             ${rPr}
@@ -4718,7 +4722,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </w:p>`;
     }
 
-    function wordTableCell(text, { width, bold = false, header = false, align = "center", ltr = false } = {}) {
+    function wordTableCell(text, { width, bold = false, header = false, align = "center", ltr = false, digitField = false } = {}) {
       const fill = header
         ? `<w:shd w:val="clear" w:color="auto" w:fill="E8F2ED"/>`
         : "";
@@ -4729,17 +4733,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             ${fill}
             <w:vAlign w:val="center"/>
           </w:tcPr>
-          ${wordCellParagraph(text, { bold, header, align: header ? "center" : align, ltr })}
+          ${wordCellParagraph(text, { bold, header, align: header ? "center" : align, ltr, digitField })}
         </w:tc>`;
     }
 
     function wordPeopleTable(members) {
       // Match common Persian ofish Word tables (no bidiVisual):
       // left → right: تلفن | کد ملی | تاریخ تولد | سمت | نام و نام خانوادگی | ردیف
-      // RTL reading: ردیف → نام → سمت → …
       const widths = [1500, 1500, 1350, 2000, 2550, 700];
       const headers = ["تلفن", "کد ملی", "تاریخ تولد", "سمت", "نام و نام خانوادگی", "ردیف"];
-      const persianCols = new Set([3, 4]); // سمت + نام
+      // Ofish uses RTL/bidi for digit columns too — do not force LTR unicode marks
+      const digitCols = new Set([0, 1, 2, 5]); // phone, nid, birth, row
       const headerRow = `
         <w:tr>
           ${headers.map((title, i) => wordTableCell(title, {
@@ -4747,26 +4751,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             header: true,
             bold: true,
             align: "center",
-            ltr: !persianCols.has(i),
+            ltr: false,
+            digitField: digitCols.has(i),
           })).join("")}
         </w:tr>`;
 
       const bodyRows = members.map((person, index) => {
         const values = [
-          { text: wordSafeDigitField(person.phone || "—"), ltr: true, align: "center", bold: false },
-          { text: wordSafeDigitField(person.nationalId || "—"), ltr: true, align: "center", bold: false },
-          { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false },
-          { text: person.role || "—", ltr: false, align: "center", bold: false },
-          { text: person.name || "—", ltr: false, align: "center", bold: true },
-          { text: wordSafeLtrText(String(index + 1)), ltr: true, align: "center", bold: false },
+          { text: wordExportDigitText(person.phone || "—"), digitField: true, bold: false },
+          { text: wordExportDigitText(person.nationalId || "—"), digitField: true, bold: false },
+          { text: wordExportDigitText(normalizeBirthDate(person.birthDate || "") || "—"), digitField: true, bold: false },
+          { text: wordSafeLtrText(person.role || "—"), digitField: false, bold: false },
+          { text: wordSafeLtrText(person.name || "—"), digitField: false, bold: true },
+          { text: wordExportDigitText(String(index + 1)), digitField: true, bold: false },
         ];
         return `
           <w:tr>
             ${values.map((cell, i) => wordTableCell(cell.text, {
               width: widths[i],
               bold: cell.bold,
-              align: cell.align,
-              ltr: cell.ltr,
+              align: "center",
+              ltr: false,
+              digitField: cell.digitField,
             })).join("")}
           </w:tr>`;
       }).join("");
