@@ -1119,7 +1119,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="wrap">
     <header>
       <h1>تفکیک مهمانان در بخش‌ها</h1>
-      <div class="version-badge" id="appVersionBadge">نسخه ۲۵</div>
+      <div class="version-badge" id="appVersionBadge">نسخه ۲۶</div>
       <p>
         فایل‌های ورد پشت‌سرهم اضافه می‌شوند و بک‌آپ خودکار ذخیره می‌شود.
         می‌توانید نفر را دستی هم اضافه کنید، ترتیب داخل بخش را عوض کنید، و با Undo برگردید.
@@ -1150,6 +1150,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
         <div class="toolbar">
           <button type="button" id="sortAllToSectionsBtn" disabled title="ساخت بخش از روی سمت‌ها و قرار دادن دقیق همه افراد در بخش خودشان">تفکیک همه در بخش‌ها</button>
+          <button type="button" class="ghost" id="repairIdsBtn" disabled title="ترمیم کد ملی و تلفن جابه‌جا/خراب‌شده از روی منبع ذخیره یا تشخیص هوشمند">ترمیم کد ملی / تلفن</button>
           <button type="button" class="ghost" id="autoAssignBtn" disabled>چینش باقیمانده‌ها بر اساس سمت</button>
           <button type="button" class="ghost" id="unassignAllBtn" disabled>خروج از همه بخش‌ها</button>
           <button type="button" class="danger" id="clearPeopleBtn" disabled>پاک‌کردن لیست</button>
@@ -1323,8 +1324,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const UNASSIGNED = "";
     const STORAGE_KEY = "guest-sorter-backup-v1";
     const BACKUP_HISTORY_KEY = "guest-sorter-backup-history-v1";
-    // نسخه ۲۵: بخش تکراری ساخته نشود؛ تفکیک همه در یک بخش هم‌نام سمت
-    const APP_VERSION = 25;
+    // نسخه ۲۶: ترمیم جابجایی/خراب‌شدن کد ملی و تلفن + نگه‌داشتن sourceSnapshot در بک‌آپ
+    const APP_VERSION = 26;
     const APP_VERSION_FROZEN = false;
     const UNDO_LIMIT = 40;
     const MAX_BATCH_RECORDS_KEEP = 3;
@@ -1362,6 +1363,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       sectionsFromRolesBtn: document.getElementById("sectionsFromRolesBtn"),
       autoAssignBtn: document.getElementById("autoAssignBtn"),
       sortAllToSectionsBtn: document.getElementById("sortAllToSectionsBtn"),
+      repairIdsBtn: document.getElementById("repairIdsBtn"),
       unassignAllBtn: document.getElementById("unassignAllBtn"),
       clearPeopleBtn: document.getElementById("clearPeopleBtn"),
       exportWordBtn: document.getElementById("exportWordBtn"),
@@ -1616,12 +1618,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       // Layouts vary (9 vs 10+ cells because of merged org columns).
       // Reliable mapping: phone/nationalId/birth at start, role/name/row at end.
-      const phone = texts[0] || "";
-      const nationalId = texts[1] || "";
+      let phone = texts[0] || "";
+      let nationalId = texts[1] || "";
       const birthDate = normalizeBirthDate(texts[2] || "");
       const role = texts[texts.length - 3] || "";
       const name = texts[texts.length - 2] || "";
       const row = texts[texts.length - 1] || String(index + 1);
+      ({ phone, nationalId } = coercePhoneAndNationalId(phone, nationalId));
 
       if (!name) return null;
       if (isHeaderLabel(name) || isHeaderLabel(role) || isHeaderLabel(phone) || isHeaderLabel(nationalId)) return null;
@@ -1846,6 +1849,79 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return toEnglishDigits(value).replace(/\D/g, "");
     }
 
+    function reverseDigitsOnly(value) {
+      const digits = compactDigits(value);
+      return digits ? [...digits].reverse().join("") : "";
+    }
+
+    function looksLikeMobile(value) {
+      const phone = compactDigits(value);
+      return /^09\d{9}$/.test(phone);
+    }
+
+    function looksLikeNationalId(value) {
+      return isValidIranNationalId(value);
+    }
+
+    function looksLikeBirthDate(value) {
+      return Boolean(parseBirthDateParts(value));
+    }
+
+    function looksLikePersonName(value) {
+      const text = normalizeLabel(stripDirectionalMarks(value));
+      if (!text || text === "—" || text === "-") return false;
+      if (/^\d+$/.test(compactDigits(text)) && compactDigits(text).length >= 8) return false;
+      return /[\u0600-\u06FF]{2,}/.test(text);
+    }
+
+    function looksLikeRowNumber(value) {
+      const dig = compactDigits(value);
+      if (!dig) return false;
+      const n = Number(dig);
+      return dig.length <= 4 && n >= 1 && n <= 5000;
+    }
+
+    // Fix phone↔nationalId swaps and digit-reversed national IDs when unambiguous.
+    function coercePhoneAndNationalId(phone, nationalId) {
+      let p = stripDirectionalMarks(normalizeLabel(phone));
+      let n = stripDirectionalMarks(normalizeLabel(nationalId));
+      if (p === "—" || p === "-") p = "";
+      if (n === "—" || n === "-") n = "";
+
+      const pMobile = looksLikeMobile(p);
+      const nMobile = looksLikeMobile(n);
+      const pNid = looksLikeNationalId(p);
+      const nNid = looksLikeNationalId(n);
+
+      // Clear swap: fields are in each other's places
+      if ((nMobile && !pMobile && (pNid || compactDigits(p).length === 10))
+        || (nMobile && pNid && !pMobile && !nNid)) {
+        const tmp = p;
+        p = n;
+        n = tmp;
+      } else if (!pMobile && nMobile && compactDigits(p).length === 10 && compactDigits(n).length === 11) {
+        const tmp = p;
+        p = n;
+        n = tmp;
+      }
+
+      // Digit-reversed national id (only when current invalid and reverse valid)
+      if (n && !looksLikeNationalId(n)) {
+        const rev = reverseDigitsOnly(n);
+        if (looksLikeNationalId(rev) && !looksLikeMobile(n)) {
+          n = /[۰-۹]/.test(n) ? toPersianDigits(rev) : rev;
+        }
+      }
+      if (p && !looksLikeMobile(p) && !looksLikeNationalId(p)) {
+        const rev = reverseDigitsOnly(p);
+        if (looksLikeMobile(rev)) {
+          p = /[۰-۹]/.test(p) ? toPersianDigits(rev) : rev;
+        }
+      }
+
+      return { phone: p, nationalId: n };
+    }
+
     function isValidIranNationalId(value) {
       const code = compactDigits(value);
       if (!/^\d{10}$/.test(code)) return false;
@@ -1858,8 +1934,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     function isValidIranMobile(value) {
-      const phone = compactDigits(value);
-      return /^09\d{9}$/.test(phone);
+      return looksLikeMobile(value);
     }
 
     function isValidBirthDate(value) {
@@ -1928,6 +2003,101 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       // LRE…PDF keeps digit runs (dates, phone, national id) from flipping in RTL Word
       const text = stripDirectionalMarks(String(value ?? "").trim() || "—");
       return `\u202A${text}\u202C`;
+    }
+
+    function wordSafeDigitField(value) {
+      // Export identity digits in English + strong LTR marks to avoid RTL scramble
+      const raw = stripDirectionalMarks(String(value ?? "").trim());
+      if (!raw || raw === "—" || raw === "-") return wordSafeLtrText("—");
+      const digits = toEnglishDigits(raw);
+      return `\u202A\u200E${digits}\u200E\u202C`;
+    }
+
+    function findTrustedIdentitySource(person) {
+      if (!person) return null;
+      const snap = person.sourceSnapshot;
+      if (snap) {
+        const fixed = coercePhoneAndNationalId(snap.phone || "", snap.nationalId || "");
+        if (looksLikeNationalId(fixed.nationalId) || looksLikeMobile(fixed.phone)) {
+          return { ...snap, ...fixed, origin: "snapshot" };
+        }
+      }
+      const records = allInputRecords();
+      const name = normalizeLabel(person.name);
+      if (name) {
+        const byName = records.filter((r) => normalizeLabel(r.name) === name);
+        if (byName.length === 1) {
+          const fixed = coercePhoneAndNationalId(byName[0].phone || "", byName[0].nationalId || "");
+          return { ...byName[0], ...fixed, origin: "batch-name" };
+        }
+        const role = normalizeLabel(person.role);
+        if (role) {
+          const byNameRole = byName.filter((r) => normalizeLabel(r.role) === role);
+          if (byNameRole.length === 1) {
+            const fixed = coercePhoneAndNationalId(byNameRole[0].phone || "", byNameRole[0].nationalId || "");
+            return { ...byNameRole[0], ...fixed, origin: "batch-name-role" };
+          }
+        }
+      }
+      // Same valid phone, unique match
+      if (looksLikeMobile(person.phone)) {
+        const phoneKey = compactDigits(person.phone);
+        const byPhone = records.filter((r) => compactDigits(r.phone) === phoneKey);
+        if (byPhone.length === 1) {
+          const fixed = coercePhoneAndNationalId(byPhone[0].phone || "", byPhone[0].nationalId || "");
+          return { ...byPhone[0], ...fixed, origin: "batch-phone" };
+        }
+      }
+      return null;
+    }
+
+    function repairPeopleIdentities() {
+      let swapped = 0;
+      let restored = 0;
+      let reversed = 0;
+      let unchanged = 0;
+
+      for (const person of state.people) {
+        const beforePhone = person.phone || "";
+        const beforeNid = person.nationalId || "";
+
+        const trusted = findTrustedIdentitySource(person);
+        if (trusted && (looksLikeNationalId(trusted.nationalId) || looksLikeMobile(trusted.phone))) {
+          const nextPhone = trusted.phone || person.phone || "";
+          const nextNid = trusted.nationalId || person.nationalId || "";
+          const phoneChanged = compactDigits(nextPhone) !== compactDigits(beforePhone);
+          const nidChanged = compactDigits(nextNid) !== compactDigits(beforeNid);
+          if (phoneChanged || nidChanged) {
+            person.phone = nextPhone;
+            person.nationalId = nextNid;
+            if (trusted.origin === "snapshot" || String(trusted.origin || "").startsWith("batch")) {
+              restored += 1;
+            } else {
+              swapped += 1;
+            }
+            continue;
+          }
+        }
+
+        const coerced = coercePhoneAndNationalId(person.phone || "", person.nationalId || "");
+        const phoneChanged = compactDigits(coerced.phone) !== compactDigits(beforePhone);
+        const nidChanged = compactDigits(coerced.nationalId) !== compactDigits(beforeNid);
+        if (phoneChanged || nidChanged) {
+          // Detect pure reverse of national id
+          if (compactDigits(coerced.nationalId) === reverseDigitsOnly(beforeNid)
+            && compactDigits(coerced.phone) === compactDigits(beforePhone)) {
+            reversed += 1;
+          } else {
+            swapped += 1;
+          }
+          person.phone = coerced.phone;
+          person.nationalId = coerced.nationalId;
+        } else {
+          unchanged += 1;
+        }
+      }
+
+      return { swapped, restored, reversed, unchanged, total: state.people.length };
     }
 
     function validatePersonFields(person) {
@@ -2076,46 +2246,77 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     function scoreSortedColumnMap(texts, map) {
       const get = (key) => (map[key] >= 0 ? (texts[map[key]] || "") : "");
       let score = 0;
-      const row = toEnglishDigits(get("row")).replace(/[^\d]/g, "");
-      if (row) score += 1;
+      const row = get("row");
+      if (looksLikeRowNumber(row)) score += 2;
+      else if (normalizeLabel(row)) score -= 1;
+
       const name = get("name");
-      if (/[\u0600-\u06FF]/.test(name) && !/^\d+$/.test(toEnglishDigits(name).replace(/\D/g, ""))) {
-        score += 3;
-        if (name.length <= 40) score += 2;
-        if (name.length > 60) score -= 2;
-      }
-      if (/\d{2,4}\/\d{1,2}\/\d{1,2}/.test(toEnglishDigits(get("birth")))) score += 2;
-      const nid = compactDigits(get("nationalId"));
-      if (nid.length >= 8 && nid.length <= 12) score += 2;
-      const phone = compactDigits(get("phone"));
-      if (phone.length >= 10) score += 2;
-      if (map.role >= 0 && normalizeLabel(get("role"))) score += 1;
+      if (looksLikePersonName(name)) score += 5;
+      else if (normalizeLabel(name)) score -= 3;
+
+      const birth = get("birth");
+      if (looksLikeBirthDate(birth)) score += 3;
+      else if (normalizeLabel(birth) && birth !== "—") score -= 2;
+
+      const nid = get("nationalId");
+      if (looksLikeNationalId(nid)) score += 4;
+      else if (looksLikeMobile(nid)) score -= 4;
+      else if (compactDigits(nid).length >= 8) score += 1;
+
+      const phone = get("phone");
+      if (looksLikeMobile(phone)) score += 4;
+      else if (looksLikeNationalId(phone)) score -= 4;
+      else if (compactDigits(phone).length >= 10) score += 1;
+
+      if (map.role >= 0 && looksLikePersonName(get("role"))) score += 1;
+      // Penalize using same cell for two fields
+      const used = Object.values(map).filter((v) => v >= 0);
+      if (new Set(used).size !== used.length) score -= 10;
       return score;
+    }
+
+    function resolveFieldsByContent(texts) {
+      const idxs = texts.map((_, i) => i);
+      const take = (pred, prefer = idxs.slice()) => {
+        const hit = prefer.find((i) => pred(texts[i]));
+        return hit === undefined ? -1 : hit;
+      };
+      const name = take(looksLikePersonName);
+      const phone = take(looksLikeMobile, idxs.filter((i) => i !== name));
+      const nationalId = take(looksLikeNationalId, idxs.filter((i) => i !== name && i !== phone));
+      const birth = take(looksLikeBirthDate, idxs.filter((i) => ![name, phone, nationalId].includes(i)));
+      const row = take(looksLikeRowNumber, idxs.filter((i) => ![name, phone, nationalId, birth].includes(i)));
+      const role = idxs.find((i) => ![name, phone, nationalId, birth, row].includes(i)
+        && looksLikePersonName(texts[i])
+        && i !== name) ?? -1;
+      if (name < 0) return null;
+      if (phone < 0 && nationalId < 0) return null;
+      return { name, phone, nationalId, birth, row, role };
     }
 
     function resolveSortedRowFields(texts, headerMap) {
       if (headerMap) {
         const pick = (key) => (headerMap[key] >= 0 ? (texts[headerMap[key]] || "") : "");
+        const coerced = coercePhoneAndNationalId(pick("phone"), pick("nationalId"));
         return {
           row: pick("row"),
           name: pick("name"),
           birthDate: pick("birth"),
-          nationalId: pick("nationalId"),
-          phone: pick("phone"),
+          nationalId: coerced.nationalId,
+          phone: coerced.phone,
           role: pick("role"),
         };
       }
 
       const candidates = [
-        // App export with role column (after name in RTL reading)
-        { phone: 0, nationalId: 1, birth: 2, role: 3, name: 4, row: 5 },
-        // Common ofish / office Word (LTR cells, row on the right)
+        // App / ofish with role
         { phone: 0, nationalId: 1, birth: 2, role: 3, name: 4, row: 5 },
         { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
-        // Older app export with bidiVisual logical order
+        // Fully reversed visual order (some Word RTL saves)
+        { row: 0, name: 1, role: 2, birth: 3, nationalId: 4, phone: 5 },
         { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4, role: -1 },
-        // Previous app export without role
-        { phone: 0, nationalId: 1, birth: 2, name: 3, row: 4, role: -1 },
+        // Legacy bidiVisual logical order
+        { row: 0, name: 1, birth: 2, nationalId: 3, phone: 4, role: -1 },
       ];
       let best = null;
       let bestScore = -1;
@@ -2128,14 +2329,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           best = map;
         }
       }
+
+      const contentMap = resolveFieldsByContent(texts);
+      if (contentMap) {
+        const contentScore = scoreSortedColumnMap(texts, contentMap) + 2;
+        if (contentScore > bestScore) {
+          best = contentMap;
+          bestScore = contentScore;
+        }
+      }
+
       const map = best || candidates[0];
       const pick = (key) => (map[key] >= 0 ? (texts[map[key]] || "") : "");
+      const coerced = coercePhoneAndNationalId(pick("phone"), pick("nationalId"));
       return {
         row: pick("row"),
         name: pick("name"),
         birthDate: pick("birth"),
-        nationalId: pick("nationalId"),
-        phone: pick("phone"),
+        nationalId: coerced.nationalId,
+        phone: coerced.phone,
         role: pick("role"),
       };
     }
@@ -2161,8 +2373,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
         const role = fields.role === "—" ? "" : (fields.role || "");
         const birthDate = normalizeBirthDate(fields.birthDate === "—" ? "" : (fields.birthDate || ""));
-        const nationalId = fields.nationalId === "—" ? "" : (fields.nationalId || "");
-        const phone = fields.phone === "—" ? "" : (fields.phone || "");
+        let nationalId = fields.nationalId === "—" ? "" : (fields.nationalId || "");
+        let phone = fields.phone === "—" ? "" : (fields.phone || "");
+        ({ phone, nationalId } = coercePhoneAndNationalId(phone, nationalId));
 
         people.push({
           id: `${sourceFile}::sorted::${fields.row || index}::${name}::${nationalId}::${phone}::${index}`,
@@ -3104,7 +3317,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         registeredAt: person.registeredAt || null,
         assignedAt: person.assignedAt || null,
         sortedImport: !!person.sortedImport,
-        // sourceSnapshot is rebuilt on restore to keep backup small
+        // Keep original import row for recovery of scrambled ids
+        sourceSnapshot: person.sourceSnapshot || null,
       };
     }
 
@@ -3338,6 +3552,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           : captureSourceSnapshot(person);
       }
       canonicalizePersonBirthDates(state.people);
+      for (const person of state.people) {
+        const fixed = coercePhoneAndNationalId(person.phone || "", person.nationalId || "");
+        person.phone = fixed.phone;
+        person.nationalId = fixed.nationalId;
+      }
       mergeDuplicateSections();
       state.lastCheck = payload.lastCheck || null;
       state.lastSavedAt = payload.savedAt || new Date().toISOString();
@@ -3509,6 +3728,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       els.autoAssignBtn.disabled = !unassignedCount;
       if (els.sortAllToSectionsBtn) {
         els.sortAllToSectionsBtn.disabled = !hasPeople;
+      }
+      if (els.repairIdsBtn) {
+        els.repairIdsBtn.disabled = !hasPeople;
       }
       els.unassignAllBtn.disabled = !assignedCount;
       els.clearPeopleBtn.disabled = !hasPeople;
@@ -4531,8 +4753,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       const bodyRows = members.map((person, index) => {
         const values = [
-          { text: wordSafeLtrText(person.phone || "—"), ltr: true, align: "center", bold: false },
-          { text: wordSafeLtrText(person.nationalId || "—"), ltr: true, align: "center", bold: false },
+          { text: wordSafeDigitField(person.phone || "—"), ltr: true, align: "center", bold: false },
+          { text: wordSafeDigitField(person.nationalId || "—"), ltr: true, align: "center", bold: false },
           { text: wordSafeLtrText(normalizeBirthDate(person.birthDate || "") || "—"), ltr: true, align: "center", bold: false },
           { text: person.role || "—", ltr: false, align: "center", bold: false },
           { text: person.name || "—", ltr: false, align: "center", bold: true },
@@ -5143,6 +5365,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       toast(bits.join(" | ") || "تغییری لازم نبود");
       setStatus(bits.join(" | ") || "تفکیک انجام شد", result.skippedNoRole && !result.placed ? "error" : "ok");
     });
+
+    if (els.repairIdsBtn) {
+      els.repairIdsBtn.addEventListener("click", () => {
+        if (!state.people.length) {
+          toast("لیست افراد خالی است");
+          return;
+        }
+        if (!confirm("کد ملی و تلفن‌های جابه‌جا/خراب‌شده از روی منبع ذخیره‌شده یا تشخیص هوشمند ترمیم شوند؟")) return;
+        const result = withChange("ترمیم کد ملی و تلفن", () => repairPeopleIdentities());
+        const fixed = result.restored + result.swapped + result.reversed;
+        const bits = [];
+        if (result.restored) bits.push(`${result.restored} نفر از منبع ترمیم شد`);
+        if (result.swapped) bits.push(`${result.swapped} جابجایی تلفن/کد ملی اصلاح شد`);
+        if (result.reversed) bits.push(`${result.reversed} کد ملی برعکس اصلاح شد`);
+        if (!fixed) bits.push("مورد قابل‌ترمیم پیدا نشد");
+        toast(bits.join(" | "));
+        setStatus(
+          bits.join(" | ")
+          + " — اگر فایل ورودی اصلی را دارید دوباره وارد کنید یا بک‌آپ قدیمی را بازیابی کنید",
+          fixed ? "ok" : "error"
+        );
+        persistBackupReliable().catch(() => {});
+      });
+    }
 
     els.autoAssignBtn.addEventListener("click", () => {
       const count = withChange("چینش باقیمانده‌ها", () => {
